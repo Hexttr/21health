@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -82,45 +82,25 @@ export default function AdminStudents() {
   const loadStudents = async () => {
     setLoadingStudents(true);
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, email, name, invitation_code_id, is_blocked');
-
-      if (profilesError) throw profilesError;
-
-      const { data: codes, error: codesError } = await (supabase
-        .from('invitation_codes' as any)
-        .select('id, comment') as any);
-
-      const { data: progress, error: progressError } = await supabase
-        .from('student_progress')
-        .select('user_id, completed, quiz_completed');
-
-      if (progressError) throw progressError;
-
-      const codeMap = new Map<string, string>();
-      if (codes) {
-        codes.forEach((c: any) => codeMap.set(c.id, c.comment));
-      }
-
-      const streams = new Set<string>();
-      
-      const studentData: StudentProgress[] = (profiles || []).map((profile: any) => {
-        const userProgress = (progress || []).filter(p => p.user_id === profile.user_id);
-        const streamComment = profile.invitation_code_id ? codeMap.get(profile.invitation_code_id) || null : null;
-        if (streamComment) streams.add(streamComment);
-        
-        return {
-          user_id: profile.user_id,
-          email: profile.email,
-          name: profile.name,
-          completed_lessons: userProgress.filter(p => p.completed).length,
-          quiz_completed: userProgress.filter(p => p.quiz_completed).length,
-          invitation_code_comment: streamComment,
-          is_blocked: profile.is_blocked || false
-        };
-      });
-
+      const data = await api<Array<{
+        user_id: string;
+        email: string;
+        name: string;
+        completed_lessons: number;
+        quiz_completed: number;
+        invitation_code_comment: string | null;
+        is_blocked: boolean;
+      }>>('/admin/users');
+      const studentData: StudentProgress[] = data.map((u) => ({
+        user_id: u.user_id,
+        email: u.email,
+        name: u.name,
+        completed_lessons: u.completed_lessons,
+        quiz_completed: u.quiz_completed,
+        invitation_code_comment: u.invitation_code_comment,
+        is_blocked: u.is_blocked
+      }));
+      const streams = new Set(data.map(u => u.invitation_code_comment).filter(Boolean) as string[]);
       setAvailableStreams(Array.from(streams).sort());
       setStudents(studentData);
     } catch (error) {
@@ -134,34 +114,10 @@ export default function AdminStudents() {
   const toggleBlockStudent = async (student: StudentProgress) => {
     try {
       const newBlockedStatus = !student.is_blocked;
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          is_blocked: newBlockedStatus,
-          blocked_at: newBlockedStatus ? new Date().toISOString() : null
-        } as any)
-        .eq('user_id', student.user_id);
-
-      if (error) throw error;
-
-      if (newBlockedStatus) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/force-logout-user`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({ userId: student.user_id }),
-            }
-          );
-        }
-      }
-
+      await api(newBlockedStatus ? '/admin/block-user' : '/admin/unblock-user', {
+        method: 'POST',
+        body: { userId: student.user_id }
+      });
       toast.success(newBlockedStatus ? `${student.name} заблокирован` : `${student.name} разблокирован`);
       loadStudents();
     } catch (error) {
@@ -199,13 +155,10 @@ export default function AdminStudents() {
 
     setIsSavingName(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ name: editedName.trim() })
-        .eq('user_id', editStudent.user_id);
-
-      if (error) throw error;
-
+      await api('/admin/users/update-name', {
+        method: 'POST',
+        body: { userId: editStudent.user_id, name: editedName.trim() }
+      });
       toast.success(`Имя изменено на "${editedName.trim()}"`);
       setEditNameDialogOpen(false);
       setEditStudent(null);
@@ -230,43 +183,20 @@ export default function AdminStudents() {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      toast.error('Необходима авторизация');
-      return;
-    }
-
     setIsResettingPassword(true);
     try {
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            email: resetStudent.email,
-            newPassword: newPassword,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Ошибка сброса пароля');
-      }
-
+      await api('/admin/reset-password', {
+        method: 'POST',
+        body: { email: resetStudent.email, newPassword }
+      });
       toast.success(`Пароль для ${resetStudent.name} успешно изменён`);
       setResetDialogOpen(false);
       setResetStudent(null);
       setNewPassword('');
-    } catch (error: any) {
+      loadStudents();
+    } catch (error: unknown) {
       console.error('Error resetting password:', error);
-      toast.error(error.message || 'Ошибка сброса пароля');
+      toast.error(error instanceof Error ? error.message : 'Ошибка сброса пароля');
     } finally {
       setIsResettingPassword(false);
     }

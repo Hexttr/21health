@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function usePublishedLessons() {
@@ -33,28 +33,16 @@ export function usePublishedLessons() {
     console.log('[PublishedLessons] Starting fetch, force:', force, 'timestamp:', Date.now());
     
     try {
-      // Add cache-busting header and timestamp to prevent mobile browser caching
-      const { data, error } = await supabase
-        .from('lesson_content')
-        .select('lesson_id, is_published')
-        .eq('is_published', true)
-        .abortSignal(AbortSignal.timeout(10000)); // 10s timeout
+      const data = await api<Array<{ lesson_id: number }>>('/lessons');
 
       if (!mountedRef.current) {
         console.log('[PublishedLessons] Component unmounted, ignoring response');
         return;
       }
 
-      if (error) {
-        console.error('[PublishedLessons] Error loading:', error.message);
-        setLoading(false);
-        isFetchingRef.current = false;
-        return;
-      }
-
       console.log('[PublishedLessons] Loaded:', data?.length || 0, 'published lessons');
       
-      const newSet = new Set((data || []).map(item => item.lesson_id));
+      const newSet = new Set((data || []).map(item => item.lessonId));
       console.log('[PublishedLessons] Setting lessons:', Array.from(newSet));
       
       setPublishedLessons(newSet);

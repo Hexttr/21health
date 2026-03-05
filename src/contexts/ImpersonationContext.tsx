@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import { supabase } from '@/api/supabase';
 
 interface ImpersonatedUser {
   user_id: string;

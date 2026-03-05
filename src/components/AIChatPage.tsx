@@ -81,20 +81,16 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
     let assistantContent = '';
 
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: newMessages,
-            model,
-          }),
-        }
-      );
+      const token = localStorage.getItem('token');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${apiUrl}/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ messages: newMessages, model }),
+      });
 
       if (response.status === 429) {
         toast.error('Превышен лимит запросов. Попробуйте позже.');

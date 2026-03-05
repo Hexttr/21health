@@ -118,6 +118,7 @@ const App = () => (
                   }
                 />
                 {/* Admin routes */}
+                <Route path="/admin" element={<Navigate to="/admin/lessons" replace />} />
                 <Route
                   path="/admin/lessons"
                   element={

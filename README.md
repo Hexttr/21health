@@ -5,22 +5,47 @@
 ## Стек
 
 - **Frontend:** Vite, React 18, TypeScript, Tailwind CSS, shadcn/ui
-- **Backend:** Supabase (Auth, PostgreSQL, Edge Functions, Storage)
+- **Backend:** Node.js, Fastify, Drizzle ORM, PostgreSQL
 - **AI:** Google Gemini (чат, квиз-тьютор, генерация изображений)
 
 ## Быстрый старт
 
+### 1. База данных
+
+**Вариант A: Docker (рекомендуется)**
+
 ```bash
-# Установка зависимостей
-npm install
-
-# Копирование переменных окружения
-cp .env.example .env
-# Заполните .env значениями из Supabase Dashboard
-
-# Запуск dev-сервера
-npm run dev
+# Запустите Docker Desktop, затем:
+docker compose up -d
 ```
+
+**Вариант B:** Создайте PostgreSQL локально или используйте Neon/Railway и базу `21day`.
+
+### 2. Backend
+
+```bash
+cd server
+npm install
+cp .env.example .env
+# Заполните DATABASE_URL, JWT_SECRET, GEMINI_API_KEY
+
+npm run db:migrate   # Применить миграции
+npm run db:seed      # Создать первый код и админа (admin@example.com / admin123)
+npm run dev          # Запуск на :3001
+```
+
+### 3. Frontend
+
+```bash
+cd ..
+npm install
+cp .env.example .env
+# VITE_API_URL=http://localhost:3001/api
+
+npm run dev          # Запуск на :8080
+```
+
+Откройте http://localhost:8080 и войдите как admin@example.com / admin123
 
 ## Скрипты
 

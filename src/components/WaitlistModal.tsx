@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { Loader2, CheckCircle, Sparkles, Brain, Users, Calendar, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,23 +30,23 @@ export function WaitlistModal({ open, onOpenChange }: WaitlistModalProps) {
     }
 
     setIsLoading(true);
-
-    const { error } = await (supabase.from('waitlist' as any).insert({
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      contact: contact.trim(),
-      contact_type: contactType,
-    } as any));
-
-    if (error) {
-      toast.error('Ошибка при отправке. Попробуйте позже.');
-      console.error('Waitlist error:', error);
-    } else {
+    try {
+      await api('/waitlist', {
+        method: 'POST',
+        body: {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          contact: contact.trim(),
+          contactType,
+        },
+      });
       setIsSuccess(true);
       toast.success('Заявка отправлена!');
+    } catch {
+      toast.error('Ошибка при отправке. Попробуйте позже.');
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   const handleClose = () => {

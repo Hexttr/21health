@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Play, Loader2 } from 'lucide-react';
@@ -31,23 +31,12 @@ export function PracticalMaterials() {
   const loadMaterials = async () => {
     console.log('[PracticalMaterials] Loading materials...');
     try {
-      const { data, error } = await supabase
-        .from('practical_materials')
-        .select('id, title, description, video_url')
-        .eq('is_published', true)
-        .order('sort_order', { ascending: true });
-
-      if (error) {
-        console.error('[PracticalMaterials] Error:', error.message);
-        setLoading(false);
-        return;
-      }
-      
+      const data = await api<Array<{ id: string; title: string; description: string | null; videoUrl: string }>>('/materials');
       console.log('[PracticalMaterials] Loaded:', data?.length || 0, 'materials');
-      setMaterials(data || []);
-      setLoading(false);
-    } catch (error: any) {
-      console.error('[PracticalMaterials] Error:', error?.message || error);
+      setMaterials((data || []).map(m => ({ ...m, video_url: m.videoUrl })));
+    } catch (error: unknown) {
+      console.error('[PracticalMaterials] Error:', error);
+    } finally {
       setLoading(false);
     }
   };

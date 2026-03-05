@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api, apiUpload } from '@/api/client';
 import { courseData, getAllLessons } from '@/data/courseData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,39 +50,27 @@ export default function AdminLessons() {
   const loadLessonContent = async (lessonId: number) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('lesson_content')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setLessonContent({
-          id: data.id,
-          lesson_id: data.lesson_id,
-          custom_description: data.custom_description,
-          video_urls: data.video_urls || [],
-          pdf_urls: (data as any).pdf_urls || [],
-          additional_materials: data.additional_materials,
-          is_published: data.is_published ?? true,
-          ai_prompt: (data as any).ai_prompt || null
-        });
-      } else {
-        setLessonContent({
-          lesson_id: lessonId,
-          custom_description: null,
-          video_urls: [],
-          pdf_urls: [],
-          additional_materials: null,
-          is_published: true,
-          ai_prompt: null
-        });
-      }
-    } catch (error) {
-      console.error('Error loading lesson content:', error);
-      toast.error('Ошибка загрузки контента урока');
+      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}`);
+      setLessonContent({
+        id: data.id,
+        lesson_id: data.lessonId,
+        custom_description: data.customDescription,
+        video_urls: data.videoUrls || [],
+        pdf_urls: data.pdfUrls || [],
+        additional_materials: data.additionalMaterials,
+        is_published: data.isPublished ?? true,
+        ai_prompt: data.aiPrompt || null
+      });
+    } catch {
+      setLessonContent({
+        lesson_id: lessonId,
+        custom_description: null,
+        video_urls: [],
+        pdf_urls: [],
+        additional_materials: null,
+        is_published: true,
+        ai_prompt: null
+      });
     } finally {
       setIsLoading(false);
     }
@@ -93,22 +81,18 @@ export default function AdminLessons() {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('lesson_content')
-        .upsert({
-          lesson_id: lessonContent.lesson_id,
-          custom_description: lessonContent.custom_description,
-          video_urls: lessonContent.video_urls,
-          pdf_urls: lessonContent.pdf_urls,
-          additional_materials: lessonContent.additional_materials,
-          is_published: lessonContent.is_published,
-          ai_prompt: lessonContent.ai_prompt
-        } as any, {
-          onConflict: 'lesson_id'
-        });
-
-      if (error) throw error;
-
+      await api('/admin/lessons', {
+        method: 'PUT',
+        body: {
+          lessonId: lessonContent.lesson_id,
+          customDescription: lessonContent.custom_description,
+          videoUrls: lessonContent.video_urls,
+          pdfUrls: lessonContent.pdf_urls,
+          additionalMaterials: lessonContent.additional_materials,
+          isPublished: lessonContent.is_published,
+          aiPrompt: lessonContent.ai_prompt
+        }
+      });
       toast.success('Контент сохранён!');
     } catch (error) {
       console.error('Error saving lesson content:', error);
@@ -167,23 +151,14 @@ export default function AdminLessons() {
 
     setUploadingPdf(true);
     try {
-      const fileName = `lesson-${lessonContent.lesson_id}/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('lesson-pdfs')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('lesson-pdfs')
-        .getPublicUrl(fileName);
-
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('lessonId', String(lessonContent.lesson_id));
+      const { url } = await apiUpload('/admin/lessons/upload-pdf', formData) as { url: string };
       setLessonContent({
         ...lessonContent,
-        pdf_urls: [...lessonContent.pdf_urls, publicUrl]
+        pdf_urls: [...lessonContent.pdf_urls, url]
       });
-
       toast.success('PDF загружен!');
     } catch (error) {
       console.error('Error uploading PDF:', error);
@@ -194,16 +169,8 @@ export default function AdminLessons() {
     }
   };
 
-  const removePdf = async (index: number) => {
+  const removePdf = (index: number) => {
     if (!lessonContent) return;
-    
-    const pdfUrl = lessonContent.pdf_urls[index];
-    const urlParts = pdfUrl.split('/lesson-pdfs/');
-    if (urlParts.length > 1) {
-      const filePath = urlParts[1];
-      await supabase.storage.from('lesson-pdfs').remove([filePath]);
-    }
-
     setLessonContent({
       ...lessonContent,
       pdf_urls: lessonContent.pdf_urls.filter((_, i) => i !== index)

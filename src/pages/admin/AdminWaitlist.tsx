@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,13 +43,8 @@ export default function AdminWaitlist() {
   const loadWaitlist = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('waitlist')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setEntries(data || []);
+      const data = await api<Array<{ id: string; firstName: string; lastName: string; contact: string; contactType: string; createdAt: string }>>('/admin/waitlist');
+      setEntries(data.map(e => ({ id: e.id, first_name: e.firstName, last_name: e.lastName, contact: e.contact, contact_type: e.contactType, created_at: e.createdAt })));
     } catch (error) {
       console.error('Error loading waitlist:', error);
       toast.error('Ошибка загрузки списка ожидания');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lesson, getWeekByLessonId } from '@/data/courseData';
 import { useProgress } from '@/contexts/ProgressContext';
-import { supabase } from '@/api/supabase';
+import { api, getUploadUrl } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { 
   ChevronDown, 
@@ -56,19 +56,16 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
   }, [lesson.id, isPublished]);
 
   const loadLessonContent = async () => {
-    const { data } = await supabase
-      .from('lesson_content')
-      .select('custom_description, video_urls, additional_materials, pdf_urls')
-      .eq('lesson_id', lesson.id)
-      .maybeSingle();
-
-    if (data) {
+    try {
+      const data = await api<{ customDescription: string | null; videoUrls: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}`);
       setLessonContent({
-        custom_description: data.custom_description,
-        video_urls: data.video_urls || [],
-        pdf_urls: (data as any).pdf_urls || [],
-        additional_materials: data.additional_materials
+        custom_description: data.customDescription,
+        video_urls: data.videoUrls || [],
+        pdf_urls: data.pdfUrls || [],
+        additional_materials: data.additionalMaterials
       });
+    } catch {
+      // Lesson content may not exist yet
     }
   };
 
@@ -309,7 +306,7 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
                   return (
                     <a
                       key={index}
-                      href={url}
+                      href={getUploadUrl(url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 p-3 rounded-lg bg-background hover:bg-secondary/50 border border-border/50 transition-colors group"

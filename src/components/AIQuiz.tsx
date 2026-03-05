@@ -5,7 +5,7 @@ import { useProgress } from '@/contexts/ProgressContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sparkles, Send, Loader2, CheckCircle2, X, Bot, Target } from 'lucide-react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { toast } from 'sonner';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -79,23 +79,20 @@ export function AIQuiz({ lesson, onClose }: AIQuizProps) {
     
     try {
       // Load custom AI prompt from lesson_content
-      const { data: lessonData, error: dbError } = await supabase
-        .from('lesson_content')
-        .select('ai_prompt')
-        .eq('lesson_id', lesson.id)
-        .maybeSingle();
-      
-      if (dbError) {
-        console.error('[AIQuiz] DB error loading prompt:', dbError);
+      let prompt: string | null = null;
+      try {
+        const lessonData = await api<{ aiPrompt: string | null }>(`/lessons/${lesson.id}`);
+        prompt = lessonData?.aiPrompt || null;
+      } catch {
+        // Lesson content may not exist
       }
-      
-      const prompt = lessonData?.ai_prompt || null;
       setCustomPrompt(prompt);
       console.log(`[AIQuiz] Custom prompt loaded: ${prompt ? 'yes' : 'no'}`);
 
       // Initialize quiz - AI will create learning plan
-      console.log('[AIQuiz] Calling ai-quiz edge function...');
-      const response = await supabase.functions.invoke('ai-quiz', {
+      console.log('[AIQuiz] Calling ai-quiz...');
+      const responseData = await api<{ response: string; learningState: unknown }>('/ai/quiz', {
+        method: 'POST',
         body: {
           lessonTitle: lesson.title,
           lessonDescription: lesson.description,
@@ -107,18 +104,8 @@ export function AIQuiz({ lesson, onClose }: AIQuizProps) {
         }
       });
 
-      console.log('[AIQuiz] Edge function response:', response.error ? response.error : 'success');
-
-      if (response.error) {
-        throw new Error(response.error.message || 'Edge function error');
-      }
-      
-      if (!response.data) {
-        throw new Error('Empty response from AI');
-      }
-      
-      const aiResponse = cleanAIResponse(response.data?.response || 'Привет! Давайте начнём обучение.');
-      const newState = response.data?.learningState;
+      const aiResponse = cleanAIResponse(responseData?.response || 'Привет! Давайте начнём обучение.');
+      const newState = responseData?.learningState;
       
       console.log(`[AIQuiz] Got ${newState?.criteria?.length || 0} criteria`);
       
@@ -197,7 +184,8 @@ export function AIQuiz({ lesson, onClose }: AIQuizProps) {
       const contextHistory = [...serverHistory.slice(-MAX_CRITERION_HISTORY), { role: 'user' as const, content: userMessage }];
       console.log(`[AIQuiz] Sending ${contextHistory.length} messages (criterion: ${learningState?.current_criterion}, retry: ${retryCount})`);
       
-      const fetchPromise = supabase.functions.invoke('ai-quiz', {
+      const responseData = await api<{ response: string; learningState: unknown; allPassed?: boolean }>('/ai/quiz', {
+        method: 'POST',
         body: {
           lessonTitle: lesson.title,
           lessonDescription: lesson.description,
@@ -209,17 +197,9 @@ export function AIQuiz({ lesson, onClose }: AIQuizProps) {
         }
       });
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('timeout')), 60000);
-      });
-
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-      if (response.error) throw new Error(response.error.message);
-      
-      const aiResponse = cleanAIResponse(response.data?.response || 'Продолжаем...');
-      const newState = response.data?.learningState;
-      const allPassed = response.data?.allPassed;
+      const aiResponse = cleanAIResponse(responseData?.response || 'Продолжаем...');
+      const newState = responseData?.learningState;
+      const allPassed = responseData?.allPassed;
       
       // Only update learning state if we got valid data
       if (newState && newState.criteria && Array.isArray(newState.criteria)) {

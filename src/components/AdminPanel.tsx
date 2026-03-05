@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api, apiUpload } from '@/api/client';
 import { courseData, Lesson, getAllLessons } from '@/data/courseData';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { Button } from '@/components/ui/button';
@@ -114,40 +114,27 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
   const loadLessonContent = async (lessonId: number) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('lesson_content')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (data) {
-        setLessonContent({
-          id: data.id,
-          lesson_id: data.lesson_id,
-          custom_description: data.custom_description,
-          video_urls: data.video_urls || [],
-          pdf_urls: (data as any).pdf_urls || [],
-          additional_materials: data.additional_materials,
-          is_published: data.is_published ?? true,
-          ai_prompt: (data as any).ai_prompt || null
-        });
-      } else {
-        // Create new content object
-        setLessonContent({
-          lesson_id: lessonId,
-          custom_description: null,
-          video_urls: [],
-          pdf_urls: [],
-          additional_materials: null,
-          is_published: true,
-          ai_prompt: null
-        });
-      }
-    } catch (error) {
-      console.error('Error loading lesson content:', error);
-      toast.error('Ошибка загрузки контента урока');
+      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}`);
+      setLessonContent({
+        id: data.id,
+        lesson_id: data.lessonId,
+        custom_description: data.customDescription,
+        video_urls: data.videoUrls || [],
+        pdf_urls: data.pdfUrls || [],
+        additional_materials: data.additionalMaterials,
+        is_published: data.isPublished ?? true,
+        ai_prompt: data.aiPrompt || null
+      });
+    } catch {
+      setLessonContent({
+        lesson_id: lessonId,
+        custom_description: null,
+        video_urls: [],
+        pdf_urls: [],
+        additional_materials: null,
+        is_published: true,
+        ai_prompt: null
+      });
     } finally {
       setIsLoading(false);
     }
@@ -158,22 +145,18 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('lesson_content')
-        .upsert({
-          lesson_id: lessonContent.lesson_id,
-          custom_description: lessonContent.custom_description,
-          video_urls: lessonContent.video_urls,
-          pdf_urls: lessonContent.pdf_urls,
-          additional_materials: lessonContent.additional_materials,
-          is_published: lessonContent.is_published,
-          ai_prompt: lessonContent.ai_prompt
-        } as any, {
-          onConflict: 'lesson_id'
-        });
-
-      if (error) throw error;
-
+      await api('/admin/lessons', {
+        method: 'PUT',
+        body: {
+          lessonId: lessonContent.lesson_id,
+          customDescription: lessonContent.custom_description,
+          videoUrls: lessonContent.video_urls,
+          pdfUrls: lessonContent.pdf_urls,
+          additionalMaterials: lessonContent.additional_materials,
+          isPublished: lessonContent.is_published,
+          aiPrompt: lessonContent.ai_prompt
+        }
+      });
       toast.success('Контент сохранён!');
     } catch (error) {
       console.error('Error saving lesson content:', error);
@@ -186,51 +169,25 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
   const loadStudents = async () => {
     setLoadingStudents(true);
     try {
-      // Get all profiles with invitation codes and blocked status
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, email, name, invitation_code_id, is_blocked');
-
-      if (profilesError) throw profilesError;
-
-      // Get all invitation codes
-      const { data: codes, error: codesError } = await (supabase
-        .from('invitation_codes' as any)
-        .select('id, comment') as any);
-
-      // Get all progress
-      const { data: progress, error: progressError } = await supabase
-        .from('student_progress')
-        .select('user_id, completed, quiz_completed');
-
-      if (progressError) throw progressError;
-
-      // Create a map of code id to comment
-      const codeMap = new Map<string, string>();
-      if (codes) {
-        codes.forEach((c: any) => codeMap.set(c.id, c.comment));
-      }
-
-      // Collect unique streams
-      const streams = new Set<string>();
-      
-      // Combine data
-      const studentData: StudentProgress[] = (profiles || []).map((profile: any) => {
-        const userProgress = (progress || []).filter(p => p.user_id === profile.user_id);
-        const streamComment = profile.invitation_code_id ? codeMap.get(profile.invitation_code_id) || null : null;
-        if (streamComment) streams.add(streamComment);
-        
-        return {
-          user_id: profile.user_id,
-          email: profile.email,
-          name: profile.name,
-          completed_lessons: userProgress.filter(p => p.completed).length,
-          quiz_completed: userProgress.filter(p => p.quiz_completed).length,
-          invitation_code_comment: streamComment,
-          is_blocked: profile.is_blocked || false
-        };
-      });
-
+      const data = await api<Array<{
+        user_id: string;
+        email: string;
+        name: string;
+        completed_lessons: number;
+        quiz_completed: number;
+        invitation_code_comment: string | null;
+        is_blocked: boolean;
+      }>>('/admin/users');
+      const studentData: StudentProgress[] = data.map((u) => ({
+        user_id: u.user_id,
+        email: u.email,
+        name: u.name,
+        completed_lessons: u.completed_lessons,
+        quiz_completed: u.quiz_completed,
+        invitation_code_comment: u.invitation_code_comment,
+        is_blocked: u.is_blocked
+      }));
+      const streams = new Set(data.map(u => u.invitation_code_comment).filter(Boolean) as string[]);
       setAvailableStreams(Array.from(streams).sort());
       setStudents(studentData);
     } catch (error) {
@@ -244,35 +201,10 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
   const toggleBlockStudent = async (student: StudentProgress) => {
     try {
       const newBlockedStatus = !student.is_blocked;
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          is_blocked: newBlockedStatus,
-          blocked_at: newBlockedStatus ? new Date().toISOString() : null
-        } as any)
-        .eq('user_id', student.user_id);
-
-      if (error) throw error;
-
-      // If blocking, force logout the user
-      if (newBlockedStatus) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/force-logout-user`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({ userId: student.user_id }),
-            }
-          );
-        }
-      }
-
+      await api(newBlockedStatus ? '/admin/block-user' : '/admin/unblock-user', {
+        method: 'POST',
+        body: { userId: student.user_id }
+      });
       toast.success(newBlockedStatus ? `${student.name} заблокирован` : `${student.name} разблокирован`);
       loadStudents();
     } catch (error) {
@@ -290,13 +222,8 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
   const loadInvitationCodes = async () => {
     setLoadingCodes(true);
     try {
-      const { data, error } = await (supabase
-        .from('invitation_codes' as any)
-        .select('*')
-        .order('created_at', { ascending: false }) as any);
-
-      if (error) throw error;
-      setInvitationCodes(data || []);
+      const data = await api<Array<{ id: string; code: string; comment: string; isActive: boolean; createdAt: string }>>('/admin/codes');
+      setInvitationCodes(data.map(c => ({ id: c.id, code: c.code, comment: c.comment, is_active: c.isActive, created_at: c.createdAt })));
     } catch (error) {
       console.error('Error loading codes:', error);
       toast.error('Ошибка загрузки кодов');
@@ -322,27 +249,17 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
 
     setSavingCode(true);
     try {
-      const { error } = await (supabase
-        .from('invitation_codes' as any)
-        .insert({
-          code: newCode.trim().toUpperCase(),
-          comment: newComment.trim(),
-          is_active: true
-        } as any) as any);
-
-      if (error) throw error;
-
+      await api('/admin/codes', {
+        method: 'POST',
+        body: { code: newCode.trim().toUpperCase(), comment: newComment.trim(), isActive: true }
+      });
       toast.success('Код создан!');
       setNewCode('');
       setNewComment('');
       loadInvitationCodes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving code:', error);
-      if (error.code === '23505') {
-        toast.error('Такой код уже существует');
-      } else {
-        toast.error('Ошибка сохранения кода');
-      }
+      toast.error(error instanceof Error && error.message.includes('существует') ? 'Такой код уже существует' : 'Ошибка сохранения кода');
     } finally {
       setSavingCode(false);
     }
@@ -350,12 +267,10 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
 
   const toggleCodeActive = async (code: InvitationCode) => {
     try {
-      const { error } = await (supabase
-        .from('invitation_codes' as any)
-        .update({ is_active: !code.is_active } as any)
-        .eq('id', code.id) as any);
-
-      if (error) throw error;
+      await api(`/admin/codes/${code.id}`, {
+        method: 'PUT',
+        body: { isActive: !code.is_active }
+      });
       loadInvitationCodes();
       toast.success(code.is_active ? 'Код деактивирован' : 'Код активирован');
     } catch (error) {
@@ -418,21 +333,13 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
 
     setUploadingPdf(true);
     try {
-      const fileName = `lesson-${lessonContent.lesson_id}/${Date.now()}-${file.name}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('lesson-pdfs')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('lesson-pdfs')
-        .getPublicUrl(fileName);
-
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('lessonId', String(lessonContent.lesson_id));
+      const { url } = await apiUpload('/admin/lessons/upload-pdf', formData) as { url: string };
       setLessonContent({
         ...lessonContent,
-        pdf_urls: [...lessonContent.pdf_urls, publicUrl]
+        pdf_urls: [...lessonContent.pdf_urls, url]
       });
 
       toast.success('PDF загружен!');
@@ -445,16 +352,8 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
     }
   };
 
-  const removePdf = async (index: number) => {
+  const removePdf = (index: number) => {
     if (!lessonContent) return;
-    
-    const pdfUrl = lessonContent.pdf_urls[index];
-    // Extract file path from URL
-    const urlParts = pdfUrl.split('/lesson-pdfs/');
-    if (urlParts.length > 1) {
-      const filePath = urlParts[1];
-      await supabase.storage.from('lesson-pdfs').remove([filePath]);
-    }
 
     setLessonContent({
       ...lessonContent,
@@ -475,33 +374,10 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
 
     setIsResettingPassword(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error('Необходима авторизация');
-        return;
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            email: resetEmail,
-            newPassword: resetPassword,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Ошибка сброса пароля');
-      }
-
+      await api('/admin/reset-password', {
+        method: 'POST',
+        body: { email: resetEmail, newPassword: resetPassword }
+      });
       toast.success(`Пароль для ${resetEmail} успешно изменён`);
       setResetEmail('');
       setResetPassword('');

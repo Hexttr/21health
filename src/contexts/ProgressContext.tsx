@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useImpersonation } from './ImpersonationContext';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 
 interface LessonProgress {
   lessonId: number;
@@ -50,18 +50,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     console.log('[Progress] Fetching progress for user:', userId);
 
     try {
-      const { data, error } = await supabase
-        .from('student_progress')
-        .select('*')
-        .eq('user_id', userId);
+      const url = isImpersonating && impersonatedUser ? `/progress?userId=${impersonatedUser.user_id}` : '/progress';
+      const data = await api<Array<{ lesson_id: number; completed: boolean | null; quiz_completed: boolean | null; completed_at: string | null }>>(url);
 
       if (fetchVersionRef.current !== currentVersion) return;
-
-      if (error) {
-        console.error('[Progress] Error fetching progress:', error.message);
-        setIsLoading(false);
-        return;
-      }
 
       console.log('[Progress] Loaded:', data?.length || 0, 'progress records');
 
@@ -82,7 +74,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     }
-  }, [hasLoadedOnce]);
+  }, [hasLoadedOnce, isImpersonating, impersonatedUser]);
 
   // Force refresh function for external use
   const refreshProgress = useCallback(async () => {
@@ -108,42 +100,21 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
   }, [isSessionReady, effectiveUserId, fetchProgress]);
 
-  // Listen for auth state changes - but only clear on logout
+  // Clear progress when user logs out (effectiveUserId becomes null)
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Progress] Auth event:', event);
-        
-        // Only handle SIGNED_OUT - other events are handled by effectiveUserId change
-        if (event === 'SIGNED_OUT') {
-          // Clear progress on logout
-          setProgress([]);
-          lastFetchedUserIdRef.current = null;
-          setIsLoading(false);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
+    if (!effectiveUserId) {
+      setProgress([]);
+      lastFetchedUserIdRef.current = null;
+    }
+  }, [effectiveUserId]);
 
   const markLessonComplete = async (lessonId: number) => {
     if (!user) return;
-
-    const { error } = await supabase
-      .from('student_progress')
-      .upsert({
-        user_id: user.id,
-        lesson_id: lessonId,
-        completed: true,
-        completed_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id,lesson_id'
-      });
-
-    if (!error && user) {
-      // Force refresh to get updated data
-      await fetchProgress(user.id);
+    try {
+      await api('/progress', { method: 'PUT', body: { lessonId, completed: true } });
+      await fetchProgress(user.id, true);
+    } catch (e) {
+      console.error('[Progress] markLessonComplete error:', e);
     }
   };
 
@@ -152,36 +123,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       console.error('markQuizComplete: No user logged in');
       return;
     }
-
-    console.log('markQuizComplete: Starting for lesson', lessonId, 'user', user.id);
-
     try {
-      // Use upsert to handle both insert and update in one call
-      const { data, error } = await supabase
-        .from('student_progress')
-        .upsert({
-          user_id: user.id,
-          lesson_id: lessonId,
-          quiz_completed: true,
-          completed: true,
-          completed_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,lesson_id',
-          ignoreDuplicates: false
-        })
-        .select();
-
-      if (error) {
-        console.error('markQuizComplete: Upsert error', error);
-        throw error;
-      }
-
-      console.log('markQuizComplete: Success', data);
-      // Force refresh to get updated data
-      await fetchProgress(user.id);
+      await api('/progress', { method: 'PUT', body: { lessonId, quizCompleted: true, completed: true } });
+      await fetchProgress(user.id, true);
     } catch (error) {
       console.error('markQuizComplete: Failed to save progress', error);
-      throw error; // Re-throw so the caller knows it failed
+      throw error;
     }
   };
 

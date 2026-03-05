@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,13 +36,8 @@ export function PracticalMaterialsAdmin() {
 
   const loadMaterials = async () => {
     try {
-      const { data, error } = await supabase
-        .from('practical_materials')
-        .select('*')
-        .order('sort_order', { ascending: true });
-
-      if (error) throw error;
-      setMaterials(data || []);
+      const data = await api<Array<{ id: string; title: string; description: string | null; videoUrl: string; sortOrder: number; isPublished: boolean }>>('/admin/materials');
+      setMaterials(data.map(m => ({ id: m.id, title: m.title, description: m.description, video_url: m.videoUrl, sort_order: m.sortOrder, is_published: m.isPublished })));
     } catch (error) {
       console.error('Error loading materials:', error);
       toast.error('Ошибка загрузки материалов');
@@ -57,20 +52,12 @@ export function PracticalMaterialsAdmin() {
         ? Math.max(...materials.map(m => m.sort_order)) 
         : 0;
 
-      const { data, error } = await supabase
-        .from('practical_materials')
-        .insert({
-          title: 'Новый материал',
-          video_url: '',
-          sort_order: maxOrder + 1,
-          is_published: false
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await api<{ id: string; title: string; description: string | null; videoUrl: string; sortOrder: number; isPublished: boolean }>('/admin/materials', {
+        method: 'POST',
+        body: { title: 'Новый материал', videoUrl: '', sortOrder: maxOrder + 1, isPublished: false }
+      });
       
-      setMaterials([...materials, data]);
+      setMaterials([...materials, { id: data.id, title: data.title, description: data.description, video_url: data.videoUrl, sort_order: data.sortOrder, is_published: data.isPublished }]);
       toast.success('Материал добавлен');
     } catch (error) {
       console.error('Error adding material:', error);
@@ -87,18 +74,16 @@ export function PracticalMaterialsAdmin() {
   const saveMaterial = async (material: PracticalMaterial) => {
     setSaving(material.id);
     try {
-      const { error } = await supabase
-        .from('practical_materials')
-        .update({
+      await api(`/admin/materials/${material.id}`, {
+        method: 'PUT',
+        body: {
           title: material.title,
           description: material.description,
-          video_url: material.video_url,
-          sort_order: material.sort_order,
-          is_published: material.is_published
-        })
-        .eq('id', material.id);
-
-      if (error) throw error;
+          videoUrl: material.video_url,
+          sortOrder: material.sort_order,
+          isPublished: material.is_published
+        }
+      });
       toast.success('Сохранено');
     } catch (error) {
       console.error('Error saving material:', error);
@@ -112,12 +97,7 @@ export function PracticalMaterialsAdmin() {
     if (!confirm('Удалить этот материал?')) return;
 
     try {
-      const { error } = await supabase
-        .from('practical_materials')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await api(`/admin/materials/${id}`, { method: 'DELETE' });
       
       setMaterials(materials.filter(m => m.id !== id));
       toast.success('Материал удалён');

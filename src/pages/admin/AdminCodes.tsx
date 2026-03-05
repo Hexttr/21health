@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/api/supabase';
+import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,13 +35,8 @@ export default function AdminCodes() {
   const loadInvitationCodes = async () => {
     setLoadingCodes(true);
     try {
-      const { data, error } = await (supabase
-        .from('invitation_codes' as any)
-        .select('*')
-        .order('created_at', { ascending: false }) as any);
-
-      if (error) throw error;
-      setInvitationCodes(data || []);
+      const data = await api<Array<{ id: string; code: string; comment: string; isActive: boolean; createdAt: string }>>('/admin/codes');
+      setInvitationCodes(data.map(c => ({ id: c.id, code: c.code, comment: c.comment, is_active: c.isActive, created_at: c.createdAt })));
     } catch (error) {
       console.error('Error loading codes:', error);
       toast.error('Ошибка загрузки кодов');
@@ -67,27 +62,17 @@ export default function AdminCodes() {
 
     setSavingCode(true);
     try {
-      const { error } = await (supabase
-        .from('invitation_codes' as any)
-        .insert({
-          code: newCode.trim().toUpperCase(),
-          comment: newComment.trim(),
-          is_active: true
-        } as any) as any);
-
-      if (error) throw error;
-
+      await api('/admin/codes', {
+        method: 'POST',
+        body: { code: newCode.trim().toUpperCase(), comment: newComment.trim(), isActive: true }
+      });
       toast.success('Код создан!');
       setNewCode('');
       setNewComment('');
       loadInvitationCodes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving code:', error);
-      if (error.code === '23505') {
-        toast.error('Такой код уже существует');
-      } else {
-        toast.error('Ошибка сохранения кода');
-      }
+      toast.error(error instanceof Error && error.message.includes('существует') ? 'Такой код уже существует' : 'Ошибка сохранения кода');
     } finally {
       setSavingCode(false);
     }
@@ -95,12 +80,10 @@ export default function AdminCodes() {
 
   const toggleCodeActive = async (code: InvitationCode) => {
     try {
-      const { error } = await (supabase
-        .from('invitation_codes' as any)
-        .update({ is_active: !code.is_active } as any)
-        .eq('id', code.id) as any);
-
-      if (error) throw error;
+      await api(`/admin/codes/${code.id}`, {
+        method: 'PUT',
+        body: { isActive: !code.is_active }
+      });
       loadInvitationCodes();
       toast.success(code.is_active ? 'Код деактивирован' : 'Код активирован');
     } catch (error) {
