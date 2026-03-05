@@ -295,6 +295,33 @@
     animation: fadeInUp 0.6s ease-out forwards;
   }
 
+  /* Скрыть полосу прокрутки в поле ввода чата до момента, пока она не понадобится */
+  .chat-input-wrap textarea {
+    overflow-y: auto;
+  }
+  .chat-input-wrap textarea::-webkit-scrollbar {
+    width: 6px;
+  }
+  .chat-input-wrap textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chat-input-wrap textarea::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+  }
+  .chat-input-wrap textarea:hover::-webkit-scrollbar-thumb,
+  .chat-input-wrap textarea:focus::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
+  .chat-input-wrap textarea {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .chat-input-wrap textarea:hover,
+  .chat-input-wrap textarea:focus {
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
   .animate-slide-up {
     animation: slideUp 0.5s ease-out forwards;
   }

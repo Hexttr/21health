@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProgressProvider } from "@/contexts/ProgressContext";
 import { ImpersonationProvider } from "@/contexts/ImpersonationContext";
+import { ChatContextProvider } from "@/contexts/ChatContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import Index from "./pages/Index";
@@ -48,6 +49,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
+    <ChatContextProvider>
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
@@ -56,6 +58,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         </main>
       </div>
     </SidebarProvider>
+    </ChatContextProvider>
   );
 };
 

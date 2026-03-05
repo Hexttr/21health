@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useChatContext } from '@/contexts/ChatContext';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -19,12 +20,22 @@ interface AIChatPageProps {
 
 const getChatStorageKey = (modelName: string) => `ai-chat-${modelName.toLowerCase()}`;
 
+const getModelPath = (modelName: string) => modelName.toLowerCase();
+
+const getModelIconPath = (modelName: string) => {
+  const name = modelName.toLowerCase();
+  if (name.includes('chatgpt')) return '/icons/chatgpt.png';
+  if (name.includes('gemini')) return '/icons/gemini.png';
+  return null;
+};
+
 export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const chatContext = useChatContext();
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -58,6 +69,12 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
     setMessages([]);
     toast.success('Чат очищен');
   }, [modelName]);
+
+  useEffect(() => {
+    const modelPath = getModelPath(modelName);
+    chatContext?.registerClearHandler(modelPath, clearChat);
+    return () => chatContext?.unregisterClearHandler(modelPath);
+  }, [chatContext, modelName, clearChat]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -163,13 +180,17 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
-      {/* Header */}
-      <header className="flex-shrink-0 bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
+      {/* Header (mobile only) */}
+      <header className="md:hidden flex-shrink-0 bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 h-16">
           <div className="flex items-center gap-3">
             <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${modelColor} flex items-center justify-center shadow-soft`}>
-              <span className="text-xl">{modelIcon}</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-soft overflow-hidden bg-card border border-border/50">
+              {getModelIconPath(modelName) ? (
+                <img src={getModelIconPath(modelName)!} alt="" className="w-7 h-7 object-contain" />
+              ) : (
+                <span className="text-xl">{modelIcon}</span>
+              )}
             </div>
             <div>
               <h1 className="font-serif text-lg font-semibold text-foreground leading-none">
@@ -199,8 +220,14 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[55vh] text-center animate-fade-in-up">
-              <div className={`w-20 h-20 rounded-3xl bg-gradient-to-br ${modelColor} flex items-center justify-center mb-6 shadow-large`}>
-                <Sparkles className="w-10 h-10 text-white" />
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-large overflow-hidden bg-card border border-border/50">
+                {getModelIconPath(modelName) ? (
+                  <img src={getModelIconPath(modelName)!} alt="" className="w-14 h-14 object-contain" />
+                ) : (
+                  <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
+                    <Sparkles className="w-10 h-10 text-white" />
+                  </div>
+                )}
               </div>
               <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">
                 Начните диалог с {modelName}
@@ -208,7 +235,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
               <p className="text-muted-foreground max-w-sm leading-relaxed">
                 Задайте любой вопрос, попросите помочь с задачей или обсудите тему урока
               </p>
-              <div className="mt-8 grid gap-2 w-full max-w-sm">
+              <div className="mt-8 grid gap-3 w-full max-w-sm">
                 {[
                   'Как использовать ИИ в моей работе?',
                   'Объясни мне промпт-инжиниринг',
@@ -217,7 +244,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
                   <button
                     key={suggestion}
                     onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
-                    className="text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary border border-border/50 hover:border-primary/30 text-sm text-foreground transition-all duration-200 group"
+                    className="text-left px-4 py-3.5 rounded-xl bg-white border-2 border-border shadow-md hover:shadow-lg hover:border-primary/40 hover:bg-primary/5 text-sm font-medium text-foreground transition-all duration-200 group"
                   >
                     <span className="text-primary group-hover:text-primary mr-2">→</span>
                     {suggestion}
@@ -233,8 +260,14 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
                 style={{ animationDelay: '0ms' }}
               >
                 {message.role === 'assistant' && (
-                  <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${modelColor} flex items-center justify-center flex-shrink-0 shadow-soft mt-1`}>
-                    <Bot className="w-4 h-4 text-white" />
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-soft mt-1 overflow-hidden bg-card border border-border/50">
+                    {getModelIconPath(modelName) ? (
+                      <img src={getModelIconPath(modelName)!} alt="" className="w-5 h-5 object-contain" />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
+                        <Bot className="w-4 h-4 text-white" />
+                      </div>
+                    )}
                   </div>
                 )}
                 <div
@@ -262,8 +295,14 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
           )}
           {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
             <div className="flex gap-3 justify-start animate-fade-in">
-              <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${modelColor} flex items-center justify-center flex-shrink-0 shadow-soft mt-1`}>
-                <Bot className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-soft mt-1 overflow-hidden bg-card border border-border/50">
+                {getModelIconPath(modelName) ? (
+                  <img src={getModelIconPath(modelName)!} alt="" className="w-5 h-5 object-contain" />
+                ) : (
+                  <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                )}
               </div>
               <div className="bg-card border border-border/50 rounded-2xl rounded-bl-sm px-4 py-3 shadow-soft">
                 <div className="flex items-center gap-1.5">
@@ -282,7 +321,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
       <div className="flex-shrink-0 border-t border-border/50 bg-card/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-4">
           <div className="flex gap-3 items-end">
-            <div className="flex-1 relative">
+            <div className="flex-1 relative chat-input-wrap">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -290,7 +329,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
                 onKeyDown={handleKeyDown}
                 placeholder={`Написать ${modelName}...`}
                 rows={1}
-                className="w-full resize-none rounded-2xl border border-border/50 bg-secondary/30 focus:bg-background px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all min-h-[52px] max-h-40 leading-relaxed"
+                className="w-full resize-none rounded-2xl border border-border/50 bg-secondary/30 focus:bg-background px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all min-h-[52px] max-h-40 leading-relaxed overflow-y-auto"
                 disabled={isLoading}
                 autoComplete="off"
                 style={{ height: '52px' }}

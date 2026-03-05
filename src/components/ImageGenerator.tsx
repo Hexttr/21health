@@ -128,8 +128,8 @@ export function ImageGenerator() {
         <div className={`flex flex-col items-center justify-center py-16 text-center bg-card rounded-2xl border border-border/50 transition-all ${isLoading ? 'border-primary/30' : ''}`}>
           {isLoading ? (
             <>
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-5 shadow-large animate-pulse">
-                <Sparkles className="w-10 h-10 text-white" />
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5 shadow-large animate-pulse overflow-hidden bg-card border border-border/50">
+                <img src="/icons/banano.png" alt="" className="w-14 h-14 object-contain opacity-80" />
               </div>
               <p className="font-serif text-lg font-semibold text-foreground mb-2">Генерирую изображение...</p>
               <p className="text-sm text-muted-foreground">Это может занять несколько секунд</p>
@@ -141,8 +141,8 @@ export function ImageGenerator() {
             </>
           ) : (
             <>
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-5 shadow-large">
-                <span className="text-4xl">🍌</span>
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5 shadow-large overflow-hidden bg-card border border-border/50">
+                <img src="/icons/banano.png" alt="" className="w-14 h-14 object-contain" />
               </div>
               <p className="font-serif text-lg font-semibold text-foreground mb-2">Генератор изображений</p>
               <p className="text-sm text-muted-foreground max-w-sm">
