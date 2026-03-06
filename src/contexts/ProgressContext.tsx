@@ -51,18 +51,18 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
 
     try {
       const url = isImpersonating && impersonatedUser ? `/progress?userId=${impersonatedUser.user_id}` : '/progress';
-      const data = await api<Array<{ lesson_id: number; completed: boolean | null; quiz_completed: boolean | null; completed_at: string | null }>>(url);
+      const data = await api<Array<{ lessonId?: number; lesson_id?: number; completed?: boolean | null; quiz_completed?: boolean | null; quizCompleted?: boolean | null; completed_at?: string | null; completedAt?: string | null }>>(url);
 
       if (fetchVersionRef.current !== currentVersion) return;
 
       console.log('[Progress] Loaded:', data?.length || 0, 'progress records');
 
       const progressData = (data || []).map(p => ({
-        lessonId: p.lesson_id,
+        lessonId: p.lessonId ?? p.lesson_id ?? 0,
         completed: p.completed ?? false,
-        quizCompleted: p.quiz_completed ?? false,
-        completedAt: p.completed_at ?? undefined
-      }));
+        quizCompleted: p.quizCompleted ?? p.quiz_completed ?? false,
+        completedAt: p.completedAt ?? p.completed_at ?? undefined
+      })).filter(p => p.lessonId > 0);
       
       setProgress(progressData);
       lastFetchedUserIdRef.current = userId;
