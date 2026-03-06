@@ -1,0 +1,1 @@
+ALTER TABLE "lesson_content" ADD COLUMN "video_preview_urls" text[] DEFAULT '{}';

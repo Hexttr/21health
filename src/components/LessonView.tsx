@@ -34,6 +34,7 @@ interface LessonViewProps {
 interface LessonContent {
   custom_description: string | null;
   video_urls: string[];
+  video_preview_urls?: string[];
   pdf_urls: string[];
   additional_materials: string | null;
 }
@@ -43,6 +44,49 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
+  const [isPlayerVisible, setIsPlayerVisible] = useState(false);
+  const [playerReadyToShow, setPlayerReadyToShow] = useState(false);
+  const closeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedVideoIndex !== null) {
+      setPlayerReadyToShow(false);
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = requestAnimationFrame(() => {
+          setPlayerReadyToShow(true);
+          rafRef.current = null;
+        });
+      });
+    } else {
+      setPlayerReadyToShow(false);
+    }
+  }, [selectedVideoIndex]);
+
+  const openPlayer = (index: number) => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setSelectedVideoIndex(index);
+    setIsPlayerVisible(true);
+  };
+
+  const closePlayer = () => {
+    setIsPlayerVisible(false);
+    closeTimeoutRef.current = setTimeout(() => {
+      setSelectedVideoIndex(null);
+      closeTimeoutRef.current = null;
+    }, 380);
+  };
   
   const completed = isLessonCompleted(lesson.id);
   const quizDone = isQuizCompleted(lesson.id);
@@ -57,10 +101,11 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
 
   const loadLessonContent = async () => {
     try {
-      const data = await api<{ customDescription: string | null; videoUrls: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}`);
+      const data = await api<{ customDescription: string | null; videoUrls: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}`);
       setLessonContent({
         custom_description: data.customDescription,
         video_urls: data.videoUrls || [],
+        video_preview_urls: data.videoPreviewUrls || [],
         pdf_urls: data.pdfUrls || [],
         additional_materials: data.additionalMaterials
       });
@@ -212,34 +257,100 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
           </div>
           
           {lessonContent?.video_urls && lessonContent.video_urls.length > 0 ? (
-            <div className="space-y-4">
-              {lessonContent.video_urls.map((url, index) => {
-                const embedUrl = getVideoEmbedUrl(url);
-                if (embedUrl) {
+            <div className="space-y-5">
+              <div className="relative overflow-hidden">
+                {/* Cards grid - animates out when player opens */}
+                <div
+                  className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 transition-[opacity,transform] duration-350 ease-smooth motion-reduce:duration-0 ${
+                    isPlayerVisible ? 'opacity-0 scale-[0.97] pointer-events-none absolute inset-0' : 'opacity-100 scale-100'
+                  }`}
+                  style={{ transformOrigin: 'center top' }}
+                >
+                {lessonContent.video_urls.map((url, index) => {
+                  const embedUrl = getVideoEmbedUrl(url);
+                  const previewUrl = lessonContent.video_preview_urls?.[index];
+                  const title = lesson.videoTopics[index] || `Видео ${index + 1}`;
+                  const isSelected = selectedVideoIndex === index;
                   return (
-                    <div key={index} className="aspect-video rounded-2xl overflow-hidden border border-border/50 bg-muted">
-                      <iframe
-                        src={embedUrl}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => embedUrl && (isSelected ? closePlayer() : openPlayer(index))}
+                      className={`group text-left rounded-2xl overflow-hidden border-2 transition-all focus-ring ${
+                        isSelected ? 'ring-2 ring-primary border-primary shadow-lg' : 'border-border hover:border-primary/60 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="aspect-video bg-muted relative">
+                        {previewUrl ? (
+                          <img src={getUploadUrl(previewUrl)} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-br from-secondary/50 to-muted" />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+                          <div className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform opacity-90 group-hover:opacity-100">
+                            <Play className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-3 sm:p-4 bg-card">
+                        <p className="text-sm font-medium text-foreground line-clamp-2">{title}</p>
+                        {embedUrl ? (
+                          <span className="text-xs text-muted-foreground mt-1 block">Нажмите, чтобы смотреть</span>
+                        ) : (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 text-xs text-primary mt-1 hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Открыть ссылку
+                          </a>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+                </div>
+                {/* Player overlay - animates in when opened */}
+                {selectedVideoIndex !== null && (() => {
+                  const url = lessonContent!.video_urls[selectedVideoIndex];
+                  const embedUrl = getVideoEmbedUrl(url);
+                  if (!embedUrl) return null;
+                  return (
+                    <div
+                      className={`flex flex-col rounded-2xl overflow-hidden border-2 border-border bg-muted shadow-lg transition-[opacity,transform] duration-350 ease-smooth motion-reduce:duration-0 ${
+                        isPlayerVisible && playerReadyToShow
+                          ? 'opacity-100 scale-100 relative'
+                          : 'opacity-0 scale-[0.97] pointer-events-none absolute inset-0'
+                      }`}
+                      style={{ transformOrigin: 'center top' }}
+                    >
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-secondary/50 border-b border-border/50 flex-shrink-0">
+                        <span className="font-medium text-sm text-foreground min-w-0 truncate pr-3">
+                          {lesson.videoTopics[selectedVideoIndex] || `Видео ${selectedVideoIndex + 1}`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={closePlayer}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
+                        >
+                          Свернуть
+                        </button>
+                      </div>
+                      <div className="flex-1 min-h-0 aspect-video">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
                     </div>
                   );
-                }
-                return (
-                  <a
-                    key={index}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 hover:bg-secondary border border-border/50 transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4 text-primary" />
-                    <span className="font-medium">Открыть видео {index + 1}</span>
-                  </a>
-                );
-              })}
+                })()}
+              </div>
             </div>
           ) : (
             <div className="aspect-video bg-gradient-to-br from-secondary/50 to-muted rounded-2xl flex items-center justify-center border border-border/50 group cursor-pointer hover:border-primary/30 transition-all">

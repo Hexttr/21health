@@ -84,6 +84,54 @@ async function main() {
     return reply.send({ url });
   });
 
+  // Upload video preview image for lesson
+  app.post('/api/admin/lessons/upload-video-preview', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') {
+      return reply.status(403).send({ error: 'Требуются права администратора' });
+    }
+    let lessonId = 0;
+    let videoIndex = -1;
+    let buffer: Buffer | null = null;
+    let originalFilename = '';
+    const parts = req.parts();
+    for await (const part of parts) {
+      if (part.type === 'field' && part.fieldname === 'lessonId') {
+        lessonId = parseInt((part as { value: string }).value, 10);
+      } else if (part.type === 'field' && part.fieldname === 'videoIndex') {
+        videoIndex = parseInt((part as { value: string }).value, 10);
+      } else if (part.type === 'file' && part.fieldname === 'file') {
+        originalFilename = part.filename || '';
+        buffer = await part.toBuffer();
+      }
+    }
+    if (!lessonId || videoIndex < 0 || !buffer) {
+      return reply.status(400).send({ error: 'lessonId, videoIndex и file обязательны' });
+    }
+    const ext = (originalFilename.match(/\.(jpe?g|png|webp)$/i) || [])[1]?.toLowerCase() || 'jpg';
+    const fs = await import('fs/promises');
+    const uploadsDir = join(UPLOADS_DIR, 'previews');
+    await fs.mkdir(uploadsDir, { recursive: true });
+    const base = originalFilename
+      ? originalFilename.replace(/^.*[\\/]/, '').replace(/[<>:"/\\|?*]/g, '_').replace(/\.(jpe?g|png|webp)$/gi, '') || 'preview'
+      : 'preview';
+    const filename = `lesson-${lessonId}-v${videoIndex}-${base}-${Date.now()}.${ext}`;
+    const filepath = join(uploadsDir, filename);
+    await fs.writeFile(filepath, buffer);
+    const url = `/uploads/previews/${filename}`;
+    const [existing] = await db.select().from(lessonContent).where(eq(lessonContent.lessonId, lessonId));
+    const previewUrls = existing?.videoPreviewUrls ?? [];
+    const newUrls = [...previewUrls];
+    while (newUrls.length <= videoIndex) newUrls.push('');
+    newUrls[videoIndex] = url;
+    if (existing) {
+      await db.update(lessonContent).set({ videoPreviewUrls: newUrls }).where(eq(lessonContent.id, existing.id));
+    } else {
+      await db.insert(lessonContent).values({ lessonId, videoPreviewUrls: newUrls });
+    }
+    return reply.send({ url });
+  });
+
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`Server running at http://localhost:${port}`);

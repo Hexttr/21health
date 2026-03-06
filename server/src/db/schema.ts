@@ -47,6 +47,7 @@ export const lessonContent = pgTable('lesson_content', {
   lessonId: integer('lesson_id').notNull().unique(),
   customDescription: text('custom_description'),
   videoUrls: text('video_urls').array().default([]),
+  videoPreviewUrls: text('video_preview_urls').array().default([]),
   pdfUrls: text('pdf_urls').array().default([]),
   additionalMaterials: text('additional_materials'),
   aiPrompt: text('ai_prompt'),

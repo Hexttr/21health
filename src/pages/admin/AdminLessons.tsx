@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, apiUpload } from '@/api/client';
+import { api, apiUpload, getUploadUrl } from '@/api/client';
 import { courseData, getAllLessons } from '@/data/courseData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  ImagePlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,6 +29,7 @@ interface LessonContent {
   lesson_id: number;
   custom_description: string | null;
   video_urls: string[];
+  video_preview_urls: string[];
   pdf_urls: string[];
   additional_materials: string | null;
   is_published: boolean;
@@ -40,6 +42,7 @@ export default function AdminLessons() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [uploadingPreviewIndex, setUploadingPreviewIndex] = useState<number | null>(null);
 
   const allLessons = getAllLessons();
   const selectedLesson = allLessons.find(l => l.id === selectedLessonId);
@@ -53,12 +56,13 @@ export default function AdminLessons() {
   const loadLessonContent = async (lessonId: number) => {
     setIsLoading(true);
     try {
-      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}`);
+      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}`);
       setLessonContent({
         id: data.id,
         lesson_id: data.lessonId,
         custom_description: data.customDescription,
         video_urls: data.videoUrls || [],
+        video_preview_urls: data.videoPreviewUrls || [],
         pdf_urls: data.pdfUrls || [],
         additional_materials: data.additionalMaterials,
         is_published: data.isPublished ?? true,
@@ -69,6 +73,7 @@ export default function AdminLessons() {
         lesson_id: lessonId,
         custom_description: null,
         video_urls: [],
+        video_preview_urls: [],
         pdf_urls: [],
         additional_materials: null,
         is_published: true,
@@ -89,6 +94,7 @@ export default function AdminLessons() {
           lessonId: lessonContent.lesson_id,
           customDescription: lessonContent.custom_description,
           videoUrls: lessonContent.video_urls,
+          videoPreviewUrls: lessonContent.video_preview_urls,
           pdfUrls: lessonContent.pdf_urls,
           additionalMaterials: lessonContent.additional_materials,
           isPublished: lessonContent.is_published,
@@ -108,13 +114,19 @@ export default function AdminLessons() {
 
   const addVideoUrl = () => {
     if (lessonContent && lessonContent.video_urls.length < MAX_VIDEOS) {
-      setLessonContent({ ...lessonContent, video_urls: [...lessonContent.video_urls, ''] });
+      setLessonContent({
+        ...lessonContent,
+        video_urls: [...lessonContent.video_urls, ''],
+        video_preview_urls: [...(lessonContent.video_preview_urls || []), '']
+      });
     }
   };
 
   const removeVideoUrl = (index: number) => {
     if (lessonContent) {
-      setLessonContent({ ...lessonContent, video_urls: lessonContent.video_urls.filter((_, i) => i !== index) });
+      const newUrls = lessonContent.video_urls.filter((_, i) => i !== index);
+      const newPreviews = lessonContent.video_preview_urls.filter((_, i) => i !== index);
+      setLessonContent({ ...lessonContent, video_urls: newUrls, video_preview_urls: newPreviews });
     }
   };
 
@@ -154,6 +166,40 @@ export default function AdminLessons() {
   const removePdf = (index: number) => {
     if (!lessonContent) return;
     setLessonContent({ ...lessonContent, pdf_urls: lessonContent.pdf_urls.filter((_, i) => i !== index) });
+  };
+
+  const handlePreviewUpload = async (videoIndex: number, event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!lessonContent || !event.target.files?.length) return;
+    const file = event.target.files[0];
+    if (!file.type.startsWith('image/')) { toast.error('Загрузите изображение (JPG, PNG, WebP)'); return; }
+    setUploadingPreviewIndex(videoIndex);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('lessonId', String(lessonContent.lesson_id));
+      formData.append('videoIndex', String(videoIndex));
+      const { url } = await apiUpload('/admin/lessons/upload-video-preview', formData) as { url: string };
+      const newPreviews = [...(lessonContent.video_preview_urls || [])];
+      while (newPreviews.length <= videoIndex) newPreviews.push('');
+      newPreviews[videoIndex] = url;
+      setLessonContent({ ...lessonContent, video_preview_urls: newPreviews });
+      toast.success('Превью загружено!');
+    } catch (error) {
+      console.error('Error uploading preview:', error);
+      toast.error('Ошибка загрузки превью');
+    } finally {
+      setUploadingPreviewIndex(null);
+      event.target.value = '';
+    }
+  };
+
+  const removePreview = (videoIndex: number) => {
+    if (!lessonContent) return;
+    const newPreviews = [...(lessonContent.video_preview_urls || [])];
+    if (newPreviews[videoIndex]) {
+      newPreviews[videoIndex] = '';
+      setLessonContent({ ...lessonContent, video_preview_urls: newPreviews });
+    }
   };
 
   return (
@@ -288,24 +334,61 @@ export default function AdminLessons() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {lessonContent.video_urls.map((url, index) => (
-                          <div key={index} className="flex gap-2">
-                            <Input
-                              value={url}
-                              onChange={(e) => updateVideoUrl(index, e.target.value)}
-                              placeholder="ID видео или ссылка"
-                              className="rounded-xl bg-secondary/30 border-border/50 focus:border-primary"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeVideoUrl(index)}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl flex-shrink-0"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
+                        {lessonContent.video_urls.map((url, index) => {
+                          const previewUrl = lessonContent.video_preview_urls?.[index];
+                          return (
+                            <div key={index} className="flex gap-3 items-center p-2 rounded-xl bg-secondary/20 border border-border/50">
+                              <div className="relative w-20 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center group">
+                                {previewUrl ? (
+                                  <img src={getUploadUrl(previewUrl)} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <ImagePlus className="w-5 h-5 text-muted-foreground/50" />
+                                )}
+                                <label className={`absolute inset-0 cursor-pointer flex items-center justify-center transition-all ${previewUrl ? 'bg-black/0 group-hover:bg-black/40 opacity-0 group-hover:opacity-100' : 'bg-black/5'}`}>
+                                  {uploadingPreviewIndex === index ? (
+                                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                                  ) : (
+                                    <ImagePlus className="w-5 h-5 text-white" />
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={(e) => handlePreviewUpload(index, e)}
+                                    className="hidden"
+                                    disabled={uploadingPreviewIndex !== null}
+                                  />
+                                </label>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <Input
+                                  value={url}
+                                  onChange={(e) => updateVideoUrl(index, e.target.value)}
+                                  placeholder="Ссылка на YouTube или Vimeo"
+                                  className="rounded-xl bg-secondary/30 border-border/50 focus:border-primary"
+                                />
+                              </div>
+                              {previewUrl && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removePreview(index)}
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-lg flex-shrink-0"
+                                  title="Удалить превью"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeVideoUrl(index)}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl flex-shrink-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

@@ -106,6 +106,12 @@ export default {
         '18': '4.5rem',
         '22': '5.5rem',
       },
+      transitionDuration: {
+        '350': '350ms',
+      },
+      transitionTimingFunction: {
+        'smooth': 'cubic-bezier(0.16, 1, 0.3, 1)',
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
