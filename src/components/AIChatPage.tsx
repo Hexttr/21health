@@ -161,7 +161,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
           }
         }
       }
-      refreshBalance();
+      setTimeout(() => refreshBalance(), 500);
     } catch (error) {
       console.error('AI chat error:', error);
       toast.error('Ошибка при отправке сообщения');

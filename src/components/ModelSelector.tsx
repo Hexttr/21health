@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '@/api/client';
 import { ChevronDown } from 'lucide-react';
 
@@ -24,41 +24,41 @@ interface ModelSelectorProps {
   className?: string;
 }
 
-let cachedModels: AIModel[] | null = null;
-let cachedProviders: AIProvider[] | null = null;
+let cachedData: { models: AIModel[]; providers: AIProvider[] } | null = null;
+let fetchPromise: Promise<{ models: AIModel[]; providers: AIProvider[] }> | null = null;
+
+function fetchModels(): Promise<{ models: AIModel[]; providers: AIProvider[] }> {
+  if (cachedData) return Promise.resolve(cachedData);
+  if (fetchPromise) return fetchPromise;
+  fetchPromise = api<{ models: AIModel[]; providers: AIProvider[] }>('/ai-models')
+    .then((data) => { cachedData = data; fetchPromise = null; return data; })
+    .catch((e) => { fetchPromise = null; throw e; });
+  return fetchPromise;
+}
 
 export function ModelSelector({ type, selectedModelId, onSelect, className }: ModelSelectorProps) {
-  const [models, setModels] = useState<AIModel[]>(cachedModels || []);
-  const [providers, setProviders] = useState<AIProvider[]>(cachedProviders || []);
+  const [models, setModels] = useState<AIModel[]>(cachedData?.models || []);
+  const [providers, setProviders] = useState<AIProvider[]>(cachedData?.providers || []);
   const [isOpen, setIsOpen] = useState(false);
+  const [loaded, setLoaded] = useState(!!cachedData);
 
   useEffect(() => {
-    if (cachedModels) return;
-    api<{ models: AIModel[]; providers: AIProvider[] }>('/ai-models')
-      .then((data) => {
-        cachedModels = data.models;
-        cachedProviders = data.providers;
-        setModels(data.models);
-        setProviders(data.providers);
-        if (!selectedModelId && data.models.length > 0) {
-          const defaultModel = data.models.find(m => m.modelType === type);
-          if (defaultModel) onSelect(defaultModel.id);
-        }
-      })
+    fetchModels()
+      .then((data) => { setModels(data.models); setProviders(data.providers); setLoaded(true); })
       .catch(console.error);
   }, []);
-
-  useEffect(() => {
-    if (models.length > 0 && !selectedModelId) {
-      const defaultModel = models.find(m => m.modelType === type);
-      if (defaultModel) onSelect(defaultModel.id);
-    }
-  }, [models, type, selectedModelId, onSelect]);
 
   const filteredModels = models.filter(m => m.modelType === type);
   const selected = filteredModels.find(m => m.id === selectedModelId);
 
-  if (filteredModels.length <= 1) return null;
+  // Auto-select first model of this type if none selected
+  useEffect(() => {
+    if (loaded && filteredModels.length > 0 && !selectedModelId) {
+      onSelect(filteredModels[0].id);
+    }
+  }, [loaded, filteredModels.length, selectedModelId]);
+
+  if (!loaded || filteredModels.length === 0) return null;
 
   return (
     <div className={`relative ${className || ''}`}>
@@ -67,14 +67,14 @@ export function ModelSelector({ type, selectedModelId, onSelect, className }: Mo
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary/50 border border-border/50 hover:border-primary/40 text-sm font-medium text-foreground transition-colors"
       >
-        <span className="truncate max-w-[140px]">{selected?.displayName || 'Выбрать модель'}</span>
+        <span className="truncate max-w-[160px]">{selected?.displayName || 'Выбрать модель'}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 z-50 min-w-[200px] bg-card border border-border/50 rounded-xl shadow-large overflow-hidden">
+          <div className="absolute top-full left-0 mt-1 z-50 min-w-[220px] bg-card border border-border/50 rounded-xl shadow-large overflow-hidden">
             {filteredModels.map((model) => {
               const provider = providers.find(p => p.id === model.providerId);
               const isSelected = model.id === selectedModelId;

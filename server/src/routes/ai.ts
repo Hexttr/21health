@@ -123,12 +123,11 @@ export async function aiRoutes(app: FastifyInstance) {
           }
         }
       }
-      reply.raw.write('data: [DONE]\n\n');
     } finally {
       reader.releaseLock();
     }
 
-    // Bill after stream completes
+    // Bill BEFORE sending [DONE] so client sees updated balance
     const inputTokens = usageMetadata?.promptTokenCount || 0;
     const outputTokens = usageMetadata?.candidatesTokenCount || 0;
     const markup = await getMarkupPercent();
@@ -143,6 +142,7 @@ export async function aiRoutes(app: FastifyInstance) {
       await deductBalance(payload.userId, cost.finalCost, `Chat: ${inputTokens}+${outputTokens} tokens`, usageId);
     }
 
+    reply.raw.write('data: [DONE]\n\n');
     reply.raw.end();
   });
 
