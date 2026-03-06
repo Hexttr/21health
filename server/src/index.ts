@@ -168,6 +168,29 @@ async function main() {
     return reply.send({ url });
   });
 
+  // Production: serve frontend SPA (static files + fallback to index.html)
+  const isProd = process.env.NODE_ENV === 'production';
+  const distPath = join(__dirname, '..', '..', 'dist');
+  const { existsSync } = await import('fs');
+  const { resolve: resolvePath } = await import('path');
+  if (isProd && existsSync(distPath)) {
+    app.get('*', async (req, reply) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return;
+      const p = (req.url || '/').split('?')[0];
+      const filePath = p === '/' ? 'index.html' : p.slice(1).replace(/\.\./g, '');
+      const full = resolvePath(distPath, filePath);
+      if (full.startsWith(resolvePath(distPath)) && existsSync(full)) {
+        try {
+          const stat = await import('fs').then((f) => f.promises.stat(full));
+          if (stat.isFile()) return reply.sendFile(filePath, distPath);
+        } catch {
+          /* ignore */
+        }
+      }
+      return reply.sendFile('index.html', distPath);
+    });
+  }
+
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.listen({ port, host: '0.0.0.0' });
   console.log(`Server running at http://localhost:${port}`);
