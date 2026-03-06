@@ -302,7 +302,8 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
               </h3>
               <div className="space-y-2">
                 {lessonContent.pdf_urls.map((url, index) => {
-                  const fileName = decodeURIComponent(url.split('/').pop() || `Презентация ${index + 1}`);
+                  const rawName = decodeURIComponent(url.split('/').pop() || `Презентация ${index + 1}`);
+                  const fileName = rawName.replace(/-\d+\.pdf$/i, '.pdf');
                   return (
                     <a
                       key={index}

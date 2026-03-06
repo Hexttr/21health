@@ -345,7 +345,8 @@ export default function AdminLessons() {
                     ) : (
                       <div className="space-y-2">
                         {lessonContent.pdf_urls.map((url, index) => {
-                          const fileName = decodeURIComponent(url.split('/').pop() || 'PDF файл');
+                          const rawName = decodeURIComponent(url.split('/').pop() || 'PDF файл');
+                              const fileName = rawName.replace(/-\d+\.pdf$/i, '.pdf');
                           return (
                             <div key={index} className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30 border border-border/50">
                               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">

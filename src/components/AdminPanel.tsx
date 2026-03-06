@@ -599,7 +599,8 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
                             ) : (
                               <div className="space-y-2">
                                 {lessonContent.pdf_urls.map((url, index) => {
-                                  const fileName = decodeURIComponent(url.split('/').pop() || 'PDF файл');
+                                  const rawName = decodeURIComponent(url.split('/').pop() || 'PDF файл');
+                                  const fileName = rawName.replace(/-\d+\.pdf$/i, '.pdf');
                                   return (
                                     <div key={index} className="flex items-center gap-2 p-3 rounded-lg bg-secondary/50 border border-border/50">
                                       <FileText className="w-4 h-4 text-primary flex-shrink-0" />

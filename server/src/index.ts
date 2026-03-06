@@ -49,23 +49,27 @@ async function main() {
       return reply.status(403).send({ error: 'Требуются права администратора' });
     }
     let lessonId = 0;
-    let fileData: Awaited<ReturnType<typeof req.file>> | null = null;
+    let buffer: Buffer | null = null;
+    let originalFilename = '';
     const parts = req.parts();
     for await (const part of parts) {
       if (part.type === 'field' && part.fieldname === 'lessonId') {
         lessonId = parseInt((part as { value: string }).value, 10);
       } else if (part.type === 'file' && part.fieldname === 'file') {
-        fileData = part;
+        originalFilename = part.filename || '';
+        buffer = await part.toBuffer();
       }
     }
-    if (!lessonId || !fileData) {
+    if (!lessonId || !buffer) {
       return reply.status(400).send({ error: 'lessonId и file обязательны' });
     }
-    const buffer = await fileData.toBuffer();
     const fs = await import('fs/promises');
     const uploadsDir = join(UPLOADS_DIR, 'pdfs');
     await fs.mkdir(uploadsDir, { recursive: true });
-    const filename = `lesson-${lessonId}-${Date.now()}.pdf`;
+    const base = originalFilename
+      ? originalFilename.replace(/^.*[\\/]/, '').replace(/[<>:"/\\|?*]/g, '_').replace(/\.pdf$/i, '') || 'file'
+      : 'file';
+    const filename = `${base}-${Date.now()}.pdf`;
     const filepath = join(uploadsDir, filename);
     await fs.writeFile(filepath, buffer);
     const url = `/uploads/pdfs/${filename}`;
