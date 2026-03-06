@@ -10,7 +10,10 @@
     "db:create": "tsx src/db/create-db.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "db:import-lessons": "tsx src/scripts/import-lessons.ts",
+    "db:import-migration": "tsx scripts/import-from-migration.ts",
+    "db:import-data-package": "tsx scripts/import-from-data-package.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

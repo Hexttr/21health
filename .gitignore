@@ -27,3 +27,7 @@ server/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+# Data package (videos, PDFs, previews) — не коммитить
+data-package.zip
+server/migration_export/
