@@ -1,10 +1,13 @@
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'http://localhost:3001/api');
-const API_BASE = API_URL.replace(/\/api\/?$/, '') || 'http://localhost:3001';
+const API_BASE = API_URL.replace(/\/api\/?$/, '');
+// When API is relative (/api), use '' so upload URLs are relative — works with same-origin and Vite proxy.
+// When API is absolute (e.g. http://localhost:3001/api), use that base.
+const UPLOAD_BASE = API_BASE || (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 export function getUploadUrl(path: string): string {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `${API_BASE}${path.startsWith('/') ? path : '/' + path}`;
+  return `${UPLOAD_BASE}${path.startsWith('/') ? path : '/' + path}`;
 }
 
 function getToken(): string | null {
