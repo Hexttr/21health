@@ -125,7 +125,7 @@ export function LoginForm() {
             {/* Waitlist button - highly visible with animation */}
             <Button 
               onClick={() => setWaitlistOpen(true)}
-              className="mt-8 bg-white text-primary font-semibold hover:bg-white/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300 animate-pulse-soft border-2 border-white"
+              className="mt-8 bg-white text-primary font-semibold hover:bg-white/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-white"
               size="lg"
             >
               <CalendarPlus className="w-5 h-5 mr-2" />
@@ -156,7 +156,7 @@ export function LoginForm() {
             {/* Mobile waitlist button */}
             <Button 
               onClick={() => setWaitlistOpen(true)}
-              className="mt-4 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300 animate-pulse-soft"
+              className="mt-4 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300"
               size="lg"
             >
               <CalendarPlus className="w-5 h-5 mr-2" />
