@@ -10,7 +10,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const FALLBACK_CHAT_MODEL = 'gemini-2.5-flash';
 const FALLBACK_CHAT_LIST = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 const FALLBACK_IMAGE_MODEL = 'gemini-2.5-flash-image';
-const FALLBACK_IMAGE_LIST = ['gemini-2.5-flash-image', 'nano-banana-pro-preview'];
+const FALLBACK_IMAGE_LIST = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview'];
 
 const GEMINI_STREAM_URL = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
 const GEMINI_GENERATE_URL = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;

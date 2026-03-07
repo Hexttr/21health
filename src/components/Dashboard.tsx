@@ -69,7 +69,7 @@ export function Dashboard() {
             <span className="text-primary">21DAY</span> — День {selectedLesson.day}
           </span>
         </div>
-        <div className="container mx-auto px-4 py-6 max-w-3xl">
+        <div className="container mx-auto px-4 py-6 max-w-3xl min-[1920px]:max-w-[80%]">
           <LessonView
             lesson={selectedLesson}
             onBack={() => setSelectedLessonId(null)}
@@ -134,7 +134,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <main className="container mx-auto px-4 py-6 sm:py-8 max-w-4xl">
+      <main className="container mx-auto px-4 py-6 sm:py-8 max-w-4xl min-[1920px]:max-w-[80%]">
 
         {/* ════════════════════════════════════════
             HERO — inspired by the 21day landing

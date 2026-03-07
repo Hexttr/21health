@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../.env') });
 
+import { eq } from 'drizzle-orm';
 import { db } from './index.js';
 import { aiProviders, aiModels, platformSettings } from './schema.js';
 
@@ -72,7 +73,7 @@ async function seedBilling() {
       sortOrder: 10,
     },
     {
-      modelKey: 'nano-banana-pro-preview',
+      modelKey: 'gemini-3-pro-image-preview',
       displayName: 'NanoBanana Pro',
       modelType: 'image' as const,
       inputPricePer1k: '0',
@@ -82,9 +83,18 @@ async function seedBilling() {
     },
   ];
 
+  // Fix NanoBanana Pro modelKey (was nano-banana-pro-preview, correct is gemini-3-pro-image-preview)
+  const oldNanoBanana = existingModels.find(m => m.modelKey === 'nano-banana-pro-preview');
+  if (oldNanoBanana) {
+    await db.update(aiModels).set({ modelKey: 'gemini-3-pro-image-preview', updatedAt: new Date() }).where(eq(aiModels.id, oldNanoBanana.id));
+    console.log('Updated NanoBanana Pro modelKey to gemini-3-pro-image-preview');
+  }
+
   let modelsCreated = 0;
   for (const seed of modelSeeds) {
-    const exists = existingModels.find(m => m.modelKey === seed.modelKey);
+    const exists = existingModels.find(m =>
+      m.modelKey === seed.modelKey || (seed.modelKey === 'gemini-3-pro-image-preview' && m.modelKey === 'nano-banana-pro-preview')
+    );
     if (!exists) {
       await db.insert(aiModels).values({
         providerId: geminiProvider!.id,

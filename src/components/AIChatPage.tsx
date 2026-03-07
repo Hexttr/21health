@@ -124,6 +124,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
 
       setMessages([...newMessages, { role: 'assistant', content: '' }]);
 
+      let streamDone = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -140,7 +141,10 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
           if (!line.startsWith('data: ')) continue;
 
           const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
+          if (jsonStr === '[DONE]') {
+            streamDone = true;
+            break;
+          }
 
           try {
             const parsed = JSON.parse(jsonStr);
@@ -160,6 +164,7 @@ export function AIChatPage({ model, modelName, modelIcon, modelColor }: AIChatPa
             break;
           }
         }
+        if (streamDone) break;
       }
       setTimeout(() => refreshBalance(), 500);
     } catch (error) {
