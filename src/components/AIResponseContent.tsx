@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 type AIResponseContentProps = {
   content: string;
@@ -47,23 +46,85 @@ function splitCompressedPipeRows(line: string): string[] {
     .filter(Boolean);
 }
 
+function splitPipeCells(row: string): string[] {
+  return row
+    .split('|')
+    .map((cell) => cell.trim())
+    .filter(Boolean);
+}
+
+function isPipeDividerRow(cells: string[]): boolean {
+  return cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell));
+}
+
+function formatStructuredPipeRow(cells: string[], previousWasList = false): string[] {
+  if (cells.length === 0 || isPipeDividerRow(cells)) return [];
+
+  const firstCell = cells[0];
+  if (/^#$/i.test(firstCell)) {
+    return previousWasList ? [''] : [];
+  }
+
+  if (/^\d+$/.test(firstCell)) {
+    const [, title, ...details] = cells;
+    if (!title) return [];
+
+    const formatted = [`${firstCell}. **${title}**`];
+    if (details.length > 0) {
+      formatted.push(`   ${details.join(' · ')}`);
+    }
+    return formatted;
+  }
+
+  if (cells.length >= 2) {
+    const [title, ...details] = cells;
+    const formatted = [`- **${title}**`];
+    if (details.length > 0) {
+      formatted.push(`  ${details.join(' · ')}`);
+    }
+    return formatted;
+  }
+
+  return [cells.join(' ')];
+}
+
 function normalizeStructuredTables(raw: string): string {
   const lines = raw.replace(/\r\n/g, '\n').split('\n');
   const output: string[] = [];
+  let previousWasPipeList = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
     const pipeCount = (trimmed.match(/\|/g) || []).length;
 
     if (pipeCount >= 4) {
-      output.push(...splitCompressedPipeRows(trimmed));
+      const expandedRows = splitCompressedPipeRows(trimmed);
+      let producedAnyStructuredRow = false;
+
+      for (const row of expandedRows) {
+        const cells = splitPipeCells(row);
+        const formattedRows = formatStructuredPipeRow(cells, previousWasPipeList || producedAnyStructuredRow);
+
+        if (formattedRows.length > 0) {
+          output.push(...formattedRows);
+          producedAnyStructuredRow = true;
+        } else if (!isPipeDividerRow(cells) && row) {
+          output.push(row);
+        }
+      }
+
+      if (producedAnyStructuredRow) {
+        output.push('');
+        previousWasPipeList = true;
+      }
       continue;
     }
 
     output.push(trimmed ? line : '');
+    previousWasPipeList = false;
   }
 
-  return output.join('\n');
+  return output.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function preprocessAIContent(raw: string): string {
@@ -125,7 +186,6 @@ export function AIResponseContent({ content }: AIResponseContentProps) {
   return (
     <div className="prose max-w-none text-[15px] leading-[1.9] text-foreground/95 prose-p:my-4 prose-ul:my-4 prose-ol:my-4 prose-li:my-1.5 prose-strong:font-semibold prose-strong:text-foreground prose-headings:mt-8 prose-headings:mb-4 prose-headings:font-serif prose-headings:font-semibold prose-headings:tracking-[-0.02em] prose-h1:text-[2rem] prose-h2:text-[1.65rem] prose-h3:text-[1.28rem] prose-h4:text-[1.08rem] prose-hr:my-7 prose-hr:border-border/60 prose-code:rounded-md prose-code:bg-secondary/60 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.92em] prose-pre:my-5 prose-pre:rounded-3xl prose-pre:border prose-pre:border-border/50 prose-pre:bg-secondary/55 prose-pre:px-5 prose-pre:py-4 prose-pre:text-[13px] prose-blockquote:my-5 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-2 prose-blockquote:border-primary/25 prose-blockquote:bg-primary/5 prose-blockquote:px-5 prose-blockquote:py-3 prose-blockquote:text-foreground prose-table:my-5 prose-thead:border-b prose-thead:border-border/50">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
         components={{
           a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4" />,
           table: ({ node: _node, ...props }) => (
