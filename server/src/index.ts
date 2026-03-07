@@ -25,7 +25,7 @@ import { getAuthFromRequest } from './lib/auth.js';
 
 const UPLOADS_DIR = join(__dirname, '..', 'uploads');
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 20 * 1024 * 1024 }); // 20MB for image generation
 
 async function main() {
   await app.register(cors, { origin: true });

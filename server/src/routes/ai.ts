@@ -147,14 +147,15 @@ export async function aiRoutes(app: FastifyInstance) {
   });
 
   // ── AI Image generation ──
+  const MAX_IMAGES = 14;
   app.post<{
-    Body: { prompt: string; image?: string; modelId?: string };
+    Body: { prompt: string; image?: string; images?: string[]; modelId?: string };
   }>('/ai/image', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
     if (!GEMINI_API_KEY) return reply.status(500).send({ error: 'GEMINI_API_KEY не настроен' });
 
-    const { prompt, image, modelId } = req.body || {};
+    const { prompt, image, images: imagesRaw, modelId } = req.body || {};
     if (!prompt?.trim()) return reply.status(400).send({ error: 'prompt обязателен' });
 
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
@@ -164,12 +165,16 @@ export async function aiRoutes(app: FastifyInstance) {
     const modelKey = dbModel?.modelKey || FALLBACK_IMAGE_MODEL;
     const modelsToTry = dbModel ? [modelKey] : FALLBACK_IMAGE_LIST;
 
+    const imageList = Array.isArray(imagesRaw) ? imagesRaw : (image ? [image] : []);
+    if (imageList.length > MAX_IMAGES) return reply.status(400).send({ error: `Максимум ${MAX_IMAGES} изображений` });
+
     const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
       { text: prompt.trim() },
     ];
-    if (image) {
-      const base64 = image.replace(/^data:image\/\w+;base64,/, '');
-      parts.push({ inlineData: { mimeType: 'image/png', data: base64 } });
+    for (const img of imageList) {
+      const base64 = String(img).replace(/^data:image\/\w+;base64,/, '');
+      const mime = img.startsWith('data:image/') ? (img.match(/^data:(image\/\w+);/)?.[1] || 'image/png') : 'image/png';
+      parts.push({ inlineData: { mimeType: mime, data: base64 } });
     }
 
     let res: Response | null = null;

@@ -48,7 +48,10 @@ def main():
         print("4. DB seed-billing (NanoBanana modelKey fix)...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:seed-billing", check=False)
 
-        print("5. PM2 restart...")
+        print("5. Nginx client_max_body_size (для изображений)...")
+        run_ssh(client, "grep -q 'client_max_body_size' /etc/nginx/sites-available/21day 2>/dev/null || (sed -i '/server_name 21day.club/a\\\n    client_max_body_size 25m;' /etc/nginx/sites-available/21day && nginx -t && systemctl reload nginx)", check=False)
+
+        print("6. PM2 restart...")
         run_ssh(client, "pm2 restart 21day")
 
         print("\nГотово. https://21day.club")
