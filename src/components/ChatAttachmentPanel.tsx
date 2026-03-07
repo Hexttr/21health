@@ -187,8 +187,8 @@ export function ChatAttachmentPanel({
 
   return (
     <div
-      className={`flex-shrink-0 bg-card rounded-2xl border shadow-soft p-4 transition-colors ${
-        isDragOver ? 'border-primary bg-primary/5' : 'border-border/50'
+      className={`flex-shrink-0 rounded-[24px] border p-4 transition-colors ${
+        isDragOver ? 'border-primary bg-primary/5' : 'border-border/60 bg-background/95'
       } ${className || ''}`}
       onDragOver={(event) => {
         event.preventDefault();
@@ -224,7 +224,7 @@ export function ChatAttachmentPanel({
       />
 
       {hasAnyAttachments && (
-        <div className="mb-3 space-y-3 rounded-xl bg-secondary/30 border border-border/50 p-3">
+        <div className="mb-3 space-y-3 rounded-2xl border border-border/50 bg-secondary/25 p-3">
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {images.map((url, index) => (
@@ -247,7 +247,7 @@ export function ChatAttachmentPanel({
               {attachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="inline-flex max-w-full items-start gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left"
+                  className="inline-flex max-w-full items-start gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left shadow-sm"
                 >
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0">
@@ -272,7 +272,7 @@ export function ChatAttachmentPanel({
               {uploadingDocuments.map((name) => (
                 <div
                   key={name}
-                  className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left"
+                  className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left shadow-sm"
                 >
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
                   <div className="min-w-0">

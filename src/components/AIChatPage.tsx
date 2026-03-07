@@ -1,15 +1,24 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Send, Loader2, Sparkles, Trash2, Bot, MessageSquare, Upload, FileText } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Send, Loader2, Sparkles, Trash2, Bot, MessageSquare, Upload, FileText, History, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useChatContext } from '@/contexts/ChatContext';
 import { AIModel, ModelSelector } from '@/components/ModelSelector';
 import { useBalance } from '@/contexts/BalanceContext';
 import { BalanceWidget } from '@/components/BalanceWidget';
 import { ChatAttachment, ChatAttachmentPanel } from '@/components/ChatAttachmentPanel';
+import { AIConversationList } from '@/components/AIConversationList';
+import { AIResponseContent } from '@/components/AIResponseContent';
 import { getAIToolBadge, getAIToolByProvider, getAIToolByTitle } from '@/lib/ai-tools';
+import {
+  deriveConversationTitle,
+  loadConversationStore,
+  saveConversationStore,
+  type ChatConversationRecord,
+  type ChatMessageRecord,
+} from '@/lib/ai-conversations';
 
 type Message = {
   role: 'user';
@@ -23,16 +32,6 @@ type Message = {
   contextAttachments?: ChatAttachment[];
 };
 
-type StoredMessage = {
-  role: 'user';
-  content: string;
-  sourceAttachments?: ChatAttachment[];
-} | {
-  role: 'assistant';
-  content: string;
-  contextAttachments?: ChatAttachment[];
-};
-
 interface AIChatPageProps {
   modelName: string;
   modelIcon: string;
@@ -40,8 +39,6 @@ interface AIChatPageProps {
   providerName?: string;
   starterPrompts?: string[];
 }
-
-const getChatStorageKey = (modelName: string) => `ai-chat-${modelName.toLowerCase()}`;
 
 const getModelPath = (modelName: string) => modelName.toLowerCase();
 
@@ -53,6 +50,38 @@ const getModelIconPath = (modelName: string) => {
   return null;
 };
 
+function deserializeMessages(stored: ChatMessageRecord[]): Message[] {
+  return stored.map((message) => (
+    message.role === 'user'
+      ? {
+          role: 'user',
+          content: message.content,
+          sourceAttachments: message.sourceAttachments,
+        }
+      : {
+          role: 'assistant',
+          content: message.content,
+          contextAttachments: message.contextAttachments,
+        }
+  ));
+}
+
+function serializeMessages(messages: Message[]): ChatMessageRecord[] {
+  return messages.map((message) => (
+    message.role === 'user'
+      ? {
+          role: 'user',
+          content: message.content,
+          sourceAttachments: message.sourceAttachments,
+        }
+      : {
+          role: 'assistant',
+          content: message.content,
+          contextAttachments: message.contextAttachments,
+        }
+  ));
+}
+
 export function AIChatPage({ modelName, modelIcon, modelColor, providerName, starterPrompts }: AIChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -61,8 +90,12 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
   const [selectedModel, setSelectedModel] = useState<AIModel | null>(null);
   const [sourceImages, setSourceImages] = useState<string[]>([]);
   const [sourceAttachments, setSourceAttachments] = useState<ChatAttachment[]>([]);
+  const [conversations, setConversations] = useState<ChatConversationRecord[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const skipConversationSyncRef = useRef(false);
   const chatContext = useChatContext();
   const { refreshBalance } = useBalance();
   const canAttachImages = Boolean(selectedModel?.supportsImageInput);
@@ -73,6 +106,10 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
     'Объясни мне промпт-инжиниринг',
     'Помоги написать промпт',
   ];
+  const activeConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
+    [activeConversationId, conversations]
+  );
 
   useEffect(() => {
     if (!canAttachImages && sourceImages.length > 0) {
@@ -93,46 +130,74 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
   }, [messages, isLoading]);
 
   useEffect(() => {
-    const storageKey = getChatStorageKey(modelName);
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as StoredMessage[];
-        if (Array.isArray(parsed)) setMessages(parsed);
-      } catch (e) {
-        console.warn('Failed to parse saved chat:', e);
-      }
-    }
+    skipConversationSyncRef.current = true;
+    const store = loadConversationStore(modelName);
+    setConversations(store.conversations);
+    setActiveConversationId(store.activeConversationId);
+
+    const initialConversation = store.conversations.find((conversation) => conversation.id === store.activeConversationId) || null;
+    setMessages(initialConversation ? deserializeMessages(initialConversation.messages) : []);
+    setSourceImages([]);
+    setSourceAttachments([]);
   }, [modelName]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      const storageKey = getChatStorageKey(modelName);
-      localStorage.setItem(storageKey, JSON.stringify(messages.map((message) => {
-        if (message.role === 'user') {
-          return {
-            role: message.role,
-            content: message.content,
-            sourceAttachments: message.sourceAttachments,
-          };
-        }
-        return {
-          role: message.role,
-          content: message.content,
-          contextAttachments: message.contextAttachments,
-        };
-      })));
+    const timeoutId = window.setTimeout(() => {
+      saveConversationStore(modelName, {
+        activeConversationId,
+        conversations,
+      });
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeConversationId, conversations, modelName]);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    if (skipConversationSyncRef.current) {
+      skipConversationSyncRef.current = false;
+      return;
     }
-  }, [messages, modelName]);
+
+    const serialized = serializeMessages(messages);
+    setConversations((prev) => {
+      if (serialized.length === 0) {
+        return prev.filter((conversation) => conversation.id !== activeConversationId);
+      }
+
+      const existing = prev.find((conversation) => conversation.id === activeConversationId);
+      const now = new Date().toISOString();
+      const nextConversation: ChatConversationRecord = existing
+        ? {
+            ...existing,
+            title: existing.messages.length === 0 ? deriveConversationTitle(serialized) : existing.title,
+            messages: serialized,
+            updatedAt: now,
+          }
+        : {
+            id: activeConversationId,
+            title: deriveConversationTitle(serialized),
+            createdAt: now,
+            updatedAt: now,
+            messages: serialized,
+          };
+
+      return [nextConversation, ...prev.filter((conversation) => conversation.id !== activeConversationId)]
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    });
+  }, [activeConversationId, messages]);
 
   const clearChat = useCallback(() => {
-    const storageKey = getChatStorageKey(modelName);
-    localStorage.removeItem(storageKey);
+    if (activeConversationId) {
+      setConversations((prev) => prev.filter((conversation) => conversation.id !== activeConversationId));
+      setActiveConversationId(null);
+    }
+    skipConversationSyncRef.current = true;
     setMessages([]);
     setSourceImages([]);
     setSourceAttachments([]);
-    toast.success('Чат очищен');
-  }, [modelName]);
+    toast.success(activeConversationId ? 'Диалог удалён' : 'Чат очищен');
+  }, [activeConversationId]);
 
   useEffect(() => {
     const modelPath = getModelPath(modelName);
@@ -140,8 +205,58 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
     return () => chatContext?.unregisterClearHandler(modelPath);
   }, [chatContext, modelName, clearChat]);
 
+  const startNewChat = useCallback(() => {
+    skipConversationSyncRef.current = true;
+    setActiveConversationId(null);
+    setMessages([]);
+    setSourceImages([]);
+    setSourceAttachments([]);
+    setInput('');
+    setHistoryOpen(false);
+  }, []);
+
+  const selectConversation = useCallback((conversationId: string) => {
+    const conversation = conversations.find((item) => item.id === conversationId);
+    if (!conversation) return;
+    skipConversationSyncRef.current = true;
+    setActiveConversationId(conversationId);
+    setMessages(deserializeMessages(conversation.messages));
+    setSourceImages([]);
+    setSourceAttachments([]);
+    setHistoryOpen(false);
+  }, [conversations]);
+
+  const deleteConversation = useCallback((conversationId: string) => {
+    setConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+    if (conversationId === activeConversationId) {
+      const nextConversation = conversations.find((conversation) => conversation.id !== conversationId) || null;
+      skipConversationSyncRef.current = true;
+      setActiveConversationId(nextConversation?.id || null);
+      setMessages(nextConversation ? deserializeMessages(nextConversation.messages) : []);
+      setSourceImages([]);
+      setSourceAttachments([]);
+    }
+    toast.success('Диалог удалён');
+  }, [activeConversationId, conversations]);
+
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
+
+    let conversationId = activeConversationId;
+    if (!conversationId) {
+      conversationId = crypto.randomUUID();
+      setActiveConversationId(conversationId);
+      setConversations((prev) => [
+        {
+          id: conversationId!,
+          title: deriveConversationTitle([{ role: 'user', content: input.trim() }]),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: [],
+        },
+        ...prev,
+      ]);
+    }
 
     const userMessage: Message = {
       role: 'user',
@@ -151,6 +266,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
     };
     const newMessages = [...messages, userMessage];
 
+    skipConversationSyncRef.current = false;
     setMessages(newMessages);
     setInput('');
     setSourceImages([]);
@@ -269,27 +385,39 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
-      {/* Header (mobile only) */}
-      <header className="md:hidden flex-shrink-0 bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 h-16">
-          <div className="flex items-center gap-3">
-            <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-soft overflow-hidden bg-card border border-border/50">
-              {getModelIconPath(modelName) ? (
-                <img src={getModelIconPath(modelName)!} alt="" className="w-7 h-7 object-contain" />
-              ) : (
-                <span className="text-xl">{modelIcon}</span>
-              )}
-            </div>
-            <div>
-              <h1 className="font-serif text-lg font-semibold text-foreground leading-none">
-                {modelName}
-              </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-muted-foreground">
-                    Чат с искусственным интеллектом
-                  </p>
+    <div className="flex h-full min-h-0 bg-[linear-gradient(180deg,#f1ecfb_0%,#f5f1fd_100%)]">
+      <aside className="hidden xl:flex xl:w-80 xl:flex-col xl:border-r xl:border-border/40 xl:bg-card/55 xl:backdrop-blur-xl">
+        <AIConversationList
+          title={modelName}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onNewChat={startNewChat}
+          onSelectConversation={selectConversation}
+          onDeleteConversation={deleteConversation}
+        />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 border-b border-border/40 bg-background/75 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <SidebarTrigger className="xl:hidden text-muted-foreground hover:text-foreground transition-colors" />
+              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
+                {getModelIconPath(modelName) ? (
+                  <img src={getModelIconPath(modelName)!} alt="" className="h-7 w-7 object-contain" />
+                ) : (
+                  <span className="text-xl">{modelIcon}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate font-serif text-lg font-semibold text-foreground">{modelName}</div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="truncate">{activeConversation?.title || 'Новый диалог'}</span>
+                  {toolConfig && (
+                    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
+                      {toolConfig.access === 'free' ? 'free' : 'paid'}
+                    </span>
+                  )}
                   {canAttachDocuments && (
                     <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
                       docs
@@ -300,228 +428,321 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                       image
                     </span>
                   )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setHistoryOpen(true)}
+                className="xl:hidden rounded-xl text-muted-foreground hover:text-foreground"
+                title="История диалогов"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={startNewChat} className="hidden sm:inline-flex rounded-xl gap-2">
+                <Plus className="h-4 w-4" />
+                Новый чат
+              </Button>
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearChat}
+                  className="rounded-xl gap-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden md:inline">Удалить чат</span>
+                </Button>
+              )}
+              <BalanceWidget compact />
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex min-h-full max-w-5xl flex-col px-4 py-6">
+            {messages.length === 0 ? (
+              <div className="flex min-h-[58vh] flex-col items-center justify-center text-center animate-fade-in-up">
+                <div className="mb-6 flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-border/50 bg-card shadow-large">
+                  {getModelIconPath(modelName) ? (
+                    <img src={getModelIconPath(modelName)!} alt="" className="h-14 w-14 object-contain" />
+                  ) : (
+                    <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${modelColor}`}>
+                      <Sparkles className="h-10 w-10 text-white" />
+                    </div>
+                  )}
+                </div>
+                <h2 className="mb-3 font-serif text-3xl font-semibold text-foreground">
+                  Начните диалог с {modelName}
+                </h2>
+                <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
                   {toolConfig && (
-                    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
-                      {toolConfig.access === 'free' ? 'free' : 'paid'}
+                    <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
+                      {toolConfig.access === 'free' ? 'Бесплатно' : 'Платно'}
+                    </span>
+                  )}
+                  {canAttachDocuments && (
+                    <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                      Анализ документов
+                    </span>
+                  )}
+                  {canAttachImages && (
+                    <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                      Анализ изображений
                     </span>
                   )}
                 </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <BalanceWidget compact />
-            {messages.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearChat}
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl gap-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Очистить</span>
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto min-[1920px]:max-w-[80%] px-4 py-6 space-y-6 pb-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-[55vh] text-center animate-fade-in-up">
-              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-large overflow-hidden bg-card border border-border/50">
-                {getModelIconPath(modelName) ? (
-                  <img src={getModelIconPath(modelName)!} alt="" className="w-14 h-14 object-contain" />
-                ) : (
-                  <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
-                    <Sparkles className="w-10 h-10 text-white" />
-                  </div>
-                )}
+                <p className="max-w-xl text-balance text-sm leading-7 text-muted-foreground">
+                  {canAttachImages && canAttachDocuments
+                    ? 'Задайте вопрос, приложите документ, таблицу, презентацию или скрин и получите аккуратно оформленный разбор.'
+                    : canAttachDocuments
+                      ? 'Задайте вопрос и приложите документ, таблицу или презентацию для анализа.'
+                      : canAttachImages
+                        ? 'Задайте вопрос, приложите скрин или фото и попросите модель разобрать материал.'
+                        : 'Задайте любой вопрос, попросите помочь с задачей или обсудите тему урока.'}
+                </p>
+                <div className="mt-10 grid w-full max-w-2xl gap-3 md:grid-cols-2">
+                  {initialPrompts.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => {
+                        setInput(suggestion);
+                        inputRef.current?.focus();
+                      }}
+                      className="rounded-2xl border border-border/60 bg-background/90 px-4 py-4 text-left text-sm font-medium text-foreground shadow-soft transition-all duration-200 hover:border-primary/30 hover:bg-background hover:shadow-md"
+                    >
+                      <span className="mr-2 text-primary">→</span>
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">
-                Начните диалог с {modelName}
-              </h2>
-              <div className="flex items-center gap-2 mb-3">
-                {toolConfig && (
-                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
-                    {toolConfig.access === 'free' ? 'Бесплатно' : 'Платно'}
-                  </span>
-                )}
-                {canAttachDocuments && (
-                  <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
-                    Документы
-                  </span>
-                )}
-                {canAttachImages && (
-                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                    Multimodal
-                  </span>
-                )}
-              </div>
-              <p className="text-muted-foreground max-w-sm leading-relaxed">
-                {canAttachImages && canAttachDocuments
-                  ? 'Задайте вопрос, приложите скрин, PDF, таблицу или другой документ и попросите модель проанализировать материалы.'
-                  : canAttachDocuments
-                    ? 'Задайте вопрос и приложите документ, таблицу или презентацию для анализа.'
-                    : canAttachImages
-                  ? 'Задайте вопрос, приложите скрин или фото и попросите модель разобрать, сравнить или объяснить изображение.'
-                  : 'Задайте любой вопрос, попросите помочь с задачей или обсудите тему урока'}
-              </p>
-              <div className="mt-8 grid gap-3 w-full max-w-sm">
-                {initialPrompts.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
-                    className="text-left px-4 py-3.5 rounded-xl bg-card border border-border/60 shadow-soft hover:shadow-md hover:border-primary/40 hover:bg-primary/5 text-sm font-medium text-foreground transition-all duration-200 group"
+            ) : (
+              <div className="space-y-6">
+                {messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    <span className="text-primary group-hover:text-primary mr-2">→</span>
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex gap-3 animate-fade-in-up ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                style={{ animationDelay: '0ms' }}
-              >
-                {message.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-soft mt-1 overflow-hidden bg-card border border-border/50">
-                    {getModelIconPath(modelName) ? (
-                      <img src={getModelIconPath(modelName)!} alt="" className="w-5 h-5 object-contain" />
-                    ) : (
-                      <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
-                        <Bot className="w-4 h-4 text-white" />
+                    {message.role === 'assistant' && (
+                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
+                        {getModelIconPath(modelName) ? (
+                          <img src={getModelIconPath(modelName)!} alt="" className="h-5 w-5 object-contain" />
+                        ) : (
+                          <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${modelColor}`}>
+                            <Bot className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div
+                      className={`max-w-[88%] rounded-[24px] px-4 py-3 ${
+                        message.role === 'user'
+                          ? 'rounded-br-md bg-gradient-to-br from-violet-600 to-fuchsia-500 text-primary-foreground shadow-glow'
+                          : 'rounded-bl-md border border-white/60 bg-background/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)]'
+                      }`}
+                    >
+                      {message.role === 'assistant' ? (
+                        <div className="space-y-3">
+                          {message.contextAttachments && message.contextAttachments.length > 0 && (
+                            <div className="rounded-2xl border border-border/50 bg-secondary/35 p-3">
+                              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Анализируемые документы
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {message.contextAttachments.map((attachment) => (
+                                  <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-xl border border-border/50 bg-background px-3 py-2">
+                                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                                    <div className="min-w-0">
+                                      <div className="truncate text-xs font-medium">{attachment.originalName}</div>
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {attachment.pageCount ? `${attachment.pageCount} стр.` : ''}
+                                        {attachment.sheetCount ? `${attachment.sheetCount} лист.` : ''}
+                                        {attachment.slideCount ? `${attachment.slideCount} слайд.` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {message.contextImages && message.contextImages.length > 0 && (
+                            <div className="rounded-2xl border border-border/50 bg-secondary/35 p-3">
+                              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Анализируемые изображения
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {message.contextImages.slice(0, 6).map((url, imageIndex) => (
+                                  <img key={`${url}-${imageIndex}`} src={url} alt="" className="h-14 w-14 rounded-xl border border-border/50 object-cover" />
+                                ))}
+                                {message.contextImages.length > 6 && <span className="self-center text-xs text-muted-foreground">+{message.contextImages.length - 6}</span>}
+                              </div>
+                            </div>
+                          )}
+
+                          <AIResponseContent content={message.content} />
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {message.sourceAttachments && message.sourceAttachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {message.sourceAttachments.map((attachment) => (
+                                <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
+                                  <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-xs font-medium">{attachment.originalName}</div>
+                                    <div className="text-[11px] opacity-80">
+                                      {Math.max(1, Math.round(attachment.fileSize / 1024))} KB
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {message.sourceImages && message.sourceImages.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {message.sourceImages.slice(0, 6).map((url, imageIndex) => (
+                                <img key={`${url}-${imageIndex}`} src={url} alt="" className="h-12 w-12 rounded-xl border border-white/30 object-cover" />
+                              ))}
+                              {message.sourceImages.length > 6 && <span className="self-center text-xs opacity-80">+{message.sourceImages.length - 6}</span>}
+                            </div>
+                          )}
+                          <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {message.role === 'user' && (
+                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background shadow-soft">
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       </div>
                     )}
                   </div>
-                )}
-                <div
-                  className={`max-w-[82%] md:max-w-[75%] px-4 py-3 rounded-2xl ${
-                    message.role === 'user'
-                      ? 'gradient-hero text-primary-foreground rounded-br-sm'
-                      : 'bg-card border border-border/50 rounded-bl-sm shadow-soft'
-                  }`}
-                >
-                  {message.role === 'assistant' ? (
-                    <div className="space-y-2">
-                      {message.contextImages && message.contextImages.length > 0 && (
-                        <div className="rounded-xl border border-border/50 bg-secondary/30 p-2">
-                          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                            Анализируемые изображения
-                          </div>
-                          <div className="flex gap-1.5 flex-wrap">
-                            {message.contextImages.slice(0, 6).map((url, imageIndex) => (
-                              <img key={`${url}-${imageIndex}`} src={url} alt="" className="w-12 h-12 rounded object-cover border border-border/50" />
-                            ))}
-                            {message.contextImages.length > 6 && <span className="text-xs self-center">+{message.contextImages.length - 6}</span>}
-                          </div>
+                ))}
+
+                {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+                  <div className="flex justify-start gap-3">
+                    <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
+                      {getModelIconPath(modelName) ? (
+                        <img src={getModelIconPath(modelName)!} alt="" className="h-5 w-5 object-contain" />
+                      ) : (
+                        <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${modelColor}`}>
+                          <Bot className="h-4 w-4 text-white" />
                         </div>
                       )}
-                      {message.contextAttachments && message.contextAttachments.length > 0 && (
-                        <div className="rounded-xl border border-border/50 bg-secondary/30 p-2">
-                          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                            Анализируемые документы
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {message.contextAttachments.map((attachment) => (
-                              <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-lg border border-border/50 bg-background px-3 py-2">
-                                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                                <div className="min-w-0">
-                                  <div className="truncate text-xs font-medium">{attachment.originalName}</div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {attachment.pageCount ? `${attachment.pageCount} стр.` : ''}
-                                    {attachment.sheetCount ? `${attachment.sheetCount} лист.` : ''}
-                                    {attachment.slideCount ? `${attachment.slideCount} слайд.` : ''}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:font-serif prose-headings:text-base prose-pre:text-xs prose-code:text-xs prose-code:bg-secondary/50 prose-code:px-1 prose-code:rounded">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                    <div className="rounded-[24px] rounded-bl-md border border-white/60 bg-background/95 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {message.sourceImages && message.sourceImages.length > 0 && (
-                        <div className="flex gap-1.5 flex-wrap">
-                          {message.sourceImages.slice(0, 6).map((url, imageIndex) => (
-                            <img key={`${url}-${imageIndex}`} src={url} alt="" className="w-11 h-11 rounded object-cover border border-white/30" />
-                          ))}
-                          {message.sourceImages.length > 6 && <span className="text-xs self-center">+{message.sourceImages.length - 6}</span>}
-                        </div>
-                      )}
-                      {message.sourceAttachments && message.sourceAttachments.length > 0 && (
-                        <div className="flex gap-2 flex-wrap">
-                          {message.sourceAttachments.map((attachment) => (
-                            <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-lg border border-white/25 bg-white/10 px-3 py-2">
-                              <FileText className="mt-0.5 h-4 w-4 shrink-0" />
-                              <div className="min-w-0">
-                                <div className="truncate text-xs font-medium">{attachment.originalName}</div>
-                                <div className="text-[11px] opacity-80">
-                                  {Math.max(1, Math.round(attachment.fileSize / 1024))} KB
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-                    </div>
-                  )}
-                </div>
-                {message.role === 'user' && (
-                  <div className="w-8 h-8 rounded-xl bg-secondary border border-border/50 flex items-center justify-center flex-shrink-0 shadow-soft mt-1">
-                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
                   </div>
                 )}
-              </div>
-            ))
-          )}
-          {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="flex gap-3 justify-start animate-fade-in">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-soft mt-1 overflow-hidden bg-card border border-border/50">
-                {getModelIconPath(modelName) ? (
-                  <img src={getModelIconPath(modelName)!} alt="" className="w-5 h-5 object-contain" />
-                ) : (
-                  <div className={`w-full h-full bg-gradient-to-br ${modelColor} flex items-center justify-center`}>
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                )}
-              </div>
-              <div className="bg-card border border-border/50 rounded-2xl rounded-bl-sm px-4 py-3 shadow-soft">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
 
-      {/* Input */}
-      <div className="flex-shrink-0 border-t border-border/50 bg-card/80 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto min-[1920px]:max-w-[80%] px-4 py-4">
-          {canAttachImages || canAttachDocuments ? (
-            <ChatAttachmentPanel
-              images={sourceImages}
-              onImagesChange={setSourceImages}
-              attachments={sourceAttachments}
-              onAttachmentsChange={setSourceAttachments}
-              canAttachImages={canAttachImages}
-              canAttachDocuments={canAttachDocuments}
-              disabled={isLoading}
-              footer={(
-                <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border/30 bg-gradient-to-t from-background/95 via-background/92 to-background/80 px-4 py-4 shadow-[0_-18px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+          <div className="mx-auto max-w-5xl">
+            {canAttachImages || canAttachDocuments ? (
+              <ChatAttachmentPanel
+                images={sourceImages}
+                onImagesChange={setSourceImages}
+                attachments={sourceAttachments}
+                onAttachmentsChange={setSourceAttachments}
+                canAttachImages={canAttachImages}
+                canAttachDocuments={canAttachDocuments}
+                disabled={isLoading}
+                footer={(
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
+                    <ModelSelector
+                      type="text"
+                      selectedModelId={selectedModelId}
+                      onSelect={setSelectedModelId}
+                      onModelChange={setSelectedModel}
+                      providerName={providerName}
+                    />
+                    <p className="text-xs text-muted-foreground/80">
+                      Enter — отправить, Shift+Enter — новая строка, drag&drop — вложить файл
+                    </p>
+                  </div>
+                )}
+                className="border-white/80 bg-background/95 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.1)]"
+              >
+                {({ openFilePicker, isUploadingDocuments }) => (
+                  <div className="flex items-end gap-3">
+                    <Button
+                      onClick={openFilePicker}
+                      variant="outline"
+                      size="icon"
+                      className="h-[50px] w-[50px] shrink-0 rounded-2xl border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5"
+                      disabled={isLoading || isUploadingDocuments}
+                      title="Прикрепить файл"
+                    >
+                      <Upload className="h-[18px] w-[18px]" />
+                    </Button>
+                    <div className="relative flex-1">
+                      <textarea
+                        ref={inputRef}
+                        value={input}
+                        onChange={handleInput}
+                        onKeyDown={handleKeyDown}
+                        placeholder={activeConversation ? 'Продолжить диалог...' : `Написать ${modelName}...`}
+                        rows={1}
+                        className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
+                        disabled={isLoading || isUploadingDocuments}
+                        autoComplete="off"
+                        style={{ height: '50px' }}
+                      />
+                    </div>
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!input.trim() || isLoading || isUploadingDocuments}
+                      size="icon"
+                      className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-glow transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
+                    >
+                      {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                    </Button>
+                  </div>
+                )}
+              </ChatAttachmentPanel>
+            ) : (
+              <div className="rounded-[28px] border border-white/80 bg-background/95 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.1)]">
+                <div className="flex items-end gap-3">
+                  <div className="relative flex-1">
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={handleInput}
+                      onKeyDown={handleKeyDown}
+                      placeholder={activeConversation ? 'Продолжить диалог...' : `Написать ${modelName}...`}
+                      rows={1}
+                      className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
+                      disabled={isLoading}
+                      autoComplete="off"
+                      style={{ height: '50px' }}
+                    />
+                  </div>
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!input.trim() || isLoading}
+                    size="icon"
+                    className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-glow transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
+                  >
+                    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                  </Button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-3">
                   <ModelSelector
                     type="text"
                     selectedModelId={selectedModelId}
@@ -529,100 +750,34 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                     onModelChange={setSelectedModel}
                     providerName={providerName}
                   />
-                  <p className="text-xs text-muted-foreground/60">
-                    Enter — отправить, Shift+Enter — новая строка, drag&drop — вложить файл
+                  <p className="text-xs text-muted-foreground/80">
+                    Enter — отправить, Shift+Enter — новая строка
                   </p>
                 </div>
-              )}
-              className="p-3"
-            >
-              {({ openFilePicker, isUploadingDocuments }) => (
-                <div className="flex gap-3 items-end">
-                  <Button
-                    onClick={openFilePicker}
-                    variant="outline"
-                    size="icon"
-                    className="h-[52px] w-[52px] shrink-0 rounded-xl border-border/50 hover:border-primary/40"
-                    disabled={isLoading || isUploadingDocuments}
-                    title="Прикрепить файл"
-                  >
-                    <Upload className="w-4.5 h-4.5" style={{ width: '18px', height: '18px' }} />
-                  </Button>
-                  <div className="flex-1 relative chat-input-wrap">
-                    <textarea
-                      ref={inputRef}
-                      value={input}
-                      onChange={handleInput}
-                      onKeyDown={handleKeyDown}
-                      placeholder={`Написать ${modelName}...`}
-                      rows={1}
-                      className="w-full resize-none rounded-2xl border border-border/50 bg-secondary/30 focus:bg-background px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all min-h-[52px] max-h-40 leading-relaxed overflow-y-auto"
-                      disabled={isLoading || isUploadingDocuments}
-                      autoComplete="off"
-                      style={{ height: '52px' }}
-                    />
-                  </div>
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!input.trim() || isLoading || isUploadingDocuments}
-                    size="icon"
-                    className="h-[52px] w-[52px] min-w-[52px] shrink-0 rounded-2xl gradient-hero hover:opacity-90 shadow-glow transition-all disabled:opacity-50 disabled:shadow-none"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Send className="w-5 h-5" />
-                    )}
-                  </Button>
-                </div>
-              )}
-            </ChatAttachmentPanel>
-          ) : (
-            <>
-              <div className="flex gap-3 items-end">
-                <div className="flex-1 relative chat-input-wrap">
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={handleInput}
-                    onKeyDown={handleKeyDown}
-                    placeholder={`Написать ${modelName}...`}
-                    rows={1}
-                    className="w-full resize-none rounded-2xl border border-border/50 bg-secondary/30 focus:bg-background px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all min-h-[52px] max-h-40 leading-relaxed overflow-y-auto"
-                    disabled={isLoading}
-                    autoComplete="off"
-                    style={{ height: '52px' }}
-                  />
-                </div>
-                <Button
-                  onClick={sendMessage}
-                  disabled={!input.trim() || isLoading}
-                  size="icon"
-                  className="h-[52px] w-[52px] min-w-[52px] shrink-0 rounded-2xl gradient-hero hover:opacity-90 shadow-glow transition-all disabled:opacity-50 disabled:shadow-none"
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                </Button>
               </div>
-              <div className="flex items-center justify-between mt-2">
-                <ModelSelector
-                  type="text"
-                  selectedModelId={selectedModelId}
-                  onSelect={setSelectedModelId}
-                  onModelChange={setSelectedModel}
-                  providerName={providerName}
-                />
-                <p className="text-xs text-muted-foreground/60">
-                  Enter — отправить, Shift+Enter — новая строка
-                </p>
-              </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent side="left" className="w-[90vw] max-w-sm p-0">
+          <SheetHeader className="px-4 pt-6">
+            <SheetTitle>Диалоги</SheetTitle>
+            <SheetDescription>{modelName}</SheetDescription>
+          </SheetHeader>
+          <div className="h-[calc(100%-72px)]">
+            <AIConversationList
+              title={modelName}
+              conversations={conversations}
+              activeConversationId={activeConversationId}
+              onNewChat={startNewChat}
+              onSelectConversation={selectConversation}
+              onDeleteConversation={deleteConversation}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

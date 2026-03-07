@@ -51,13 +51,15 @@ const RouteFallback = () => (
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+  const hideFooter = ['/chatgpt', '/claude', '/gemini', '/groq', '/edge-tts', '/nanobanana'].includes(location.pathname);
 
   // Hide sidebar completely for unauthenticated users
   if (!isAuthenticated && !isLoading) {
     return (
       <div className="min-h-screen flex w-full flex-col">
         <main className="flex-1 min-h-0 overflow-auto">{children}</main>
-        <AppFooter />
+        {!hideFooter && <AppFooter />}
       </div>
     );
   }
@@ -69,7 +71,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         <AppSidebar />
         <main className="flex-1 relative min-w-0 flex flex-col" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
           <div className="flex-1 min-h-0 overflow-auto">{children}</div>
-          <AppFooter />
+          {!hideFooter && <AppFooter />}
         </main>
       </div>
     </SidebarProvider>
