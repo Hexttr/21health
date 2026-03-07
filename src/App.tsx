@@ -11,6 +11,7 @@ import { BalanceProvider } from "@/contexts/BalanceContext";
 import { ChatContextProvider } from "@/contexts/ChatContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { AppFooter } from "@/components/AppFooter";
 import Index from "./pages/Index";
 import ChatGPT from "./pages/ChatGPT";
 import Gemini from "./pages/Gemini";
@@ -43,10 +44,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   // Hide sidebar completely for unauthenticated users
   if (!isAuthenticated && !isLoading) {
     return (
-      <div className="min-h-screen flex w-full">
-        <main className="flex-1 relative">
-          {children}
-        </main>
+      <div className="min-h-screen flex w-full flex-col">
+        <main className="flex-1 min-h-0 overflow-auto">{children}</main>
+        <AppFooter />
       </div>
     );
   }
@@ -56,8 +56,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-        <main className="flex-1 relative min-w-0" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
-          {children}
+        <main className="flex-1 relative min-w-0 flex flex-col" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
+          <div className="flex-1 min-h-0 overflow-auto">{children}</div>
+          <AppFooter />
         </main>
       </div>
     </SidebarProvider>
