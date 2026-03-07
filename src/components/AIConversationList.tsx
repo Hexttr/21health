@@ -32,7 +32,7 @@ export function AIConversationList({
 }: AIConversationListProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-4">
+      <div className="flex h-16 items-center justify-between gap-3 border-b border-border/40 px-4">
         <div>
           <div className="ai-kicker">Диалоги</div>
           <div className="mt-1 text-sm font-medium text-foreground">{title}</div>

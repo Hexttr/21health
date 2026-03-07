@@ -123,6 +123,12 @@ export default function EdgeTTS() {
     setIsPaused(false);
   };
 
+  const starterSuggestions = [
+    'Привет! Сегодня мы разберём, как использовать искусственный интеллект в работе специалиста.',
+    'Сделай тёплую озвучку для короткого приветствия в Telegram-канале.',
+    'Прочитай этот текст спокойно и уверенно, как ведущий подкаста.',
+  ];
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
       <div className="h-screen flex flex-col">
@@ -148,31 +154,27 @@ export default function EdgeTTS() {
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto min-[1920px]:max-w-[80%] px-4 py-6 space-y-6">
-            <div className="flex flex-col items-center justify-center text-center animate-fade-in-up pt-6">
-              <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-large bg-card border border-border/50">
-                <Mic className="w-10 h-10 text-primary" />
+          <div className="max-w-3xl mx-auto min-[1920px]:max-w-[78%] px-4 py-5 space-y-5">
+            <div className="flex flex-col items-center justify-center text-center animate-fade-in-up pt-3">
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center mb-4 shadow-large bg-card border border-border/50">
+                <Mic className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">Озвучьте текст бесплатно</h2>
-              <div className="flex items-center gap-2 mb-3">
+              <h2 className="font-serif text-[28px] font-semibold text-foreground mb-2">Озвучьте текст бесплатно</h2>
+              <div className="flex items-center gap-2 mb-2">
                 <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getAIToolBadge('free')}`}>
                   Бесплатно
                 </span>
               </div>
-              <p className="text-muted-foreground max-w-md leading-relaxed">
+              <p className="text-sm text-muted-foreground max-w-md leading-7">
                 Озвучка идёт прямо в вашем браузере через Web Speech API. Голоса и качество зависят от браузера и операционной системы.
               </p>
-              <div className="mt-8 grid gap-3 w-full max-w-lg">
-                {[
-                  'Привет! Сегодня мы разберём, как использовать искусственный интеллект в работе специалиста.',
-                  'Сделай тёплую озвучку для короткого приветствия в Telegram-канале.',
-                  'Прочитай этот текст спокойно и уверенно, как ведущий подкаста.',
-                ].map((suggestion) => (
+              <div className="mt-6 grid gap-2.5 w-full max-w-lg">
+                {starterSuggestions.map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
                     onClick={() => setText(suggestion)}
-                    className="text-left px-4 py-3.5 rounded-xl bg-card border border-border/60 shadow-soft hover:shadow-md hover:border-primary/40 hover:bg-primary/5 text-sm font-medium text-foreground transition-all duration-200 group"
+                    className="text-left px-4 py-3 rounded-xl bg-card border border-border/60 shadow-soft hover:shadow-md hover:border-primary/40 hover:bg-primary/5 text-sm font-medium text-foreground transition-all duration-200 group"
                   >
                     <span className="text-primary group-hover:text-primary mr-2">→</span>
                     {suggestion}
@@ -181,7 +183,7 @@ export default function EdgeTTS() {
               </div>
             </div>
 
-            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
+            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-4 md:p-5 space-y-4">
               {!isSupported && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
                   Этот браузер не поддерживает озвучку через Web Speech API. Лучше всего работает в современных Chrome и Edge.
@@ -231,7 +233,7 @@ export default function EdgeTTS() {
                   value={text}
                   onChange={(event) => setText(event.target.value)}
                   placeholder="Введите текст для озвучки..."
-                  className="min-h-[180px] rounded-2xl bg-secondary/30 border-border/50 focus:border-primary text-sm"
+                  className="min-h-[132px] rounded-2xl bg-secondary/30 border-border/50 focus:border-primary text-sm leading-6"
                 />
                 <p className="text-xs text-muted-foreground/70">
                   Текст не уходит на сервер. Нажатие запускает локальную озвучку в вашем браузере.
@@ -280,15 +282,6 @@ export default function EdgeTTS() {
                     Стоп
                   </Button>
                 )}
-              </div>
-            </div>
-
-            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-3">
-              <p className="text-sm font-medium text-foreground">Как это работает</p>
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p>Инструмент использует встроенный синтез речи браузера и не создаёт аудиофайл на сервере.</p>
-                <p>В разных браузерах и на разных устройствах список голосов может отличаться.</p>
-                <p>Для стабильного результата лучше тестировать в `Chrome` или `Edge`.</p>
               </div>
             </div>
 

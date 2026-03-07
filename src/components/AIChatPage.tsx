@@ -396,7 +396,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
   };
 
   return (
-    <div className="gradient-surface mesh-bg flex h-full min-h-0">
+    <div className="flex h-full min-h-0 bg-[linear-gradient(180deg,hsl(248_34%_95%)_0%,hsl(248_34%_92%)_100%)]">
       <aside className="glass-card hidden xl:flex xl:w-80 xl:flex-col xl:border-r xl:border-border/40">
         <AIConversationList
           title={modelName}
@@ -408,8 +408,8 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-border/40 bg-background/72 backdrop-blur-xl">
+      <div className="mesh-bg flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,hsl(248_30%_94%)_0%,hsl(248_30%_91%)_100%)]">
+        <header className="sticky top-0 z-20 border-b border-border/40 bg-background/78 backdrop-blur-xl">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="xl:hidden text-muted-foreground hover:text-foreground transition-colors" />

@@ -165,23 +165,41 @@ export function AppSidebar() {
 
         {/* ── AI Tools ── */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-            Инструменты ИИ
+          <SidebarGroupLabel className="px-0 pb-2 pt-1">
+            {!collapsed ? (
+              <div className="rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-3 py-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary/85">
+                  Инструменты ИИ
+                </div>
+              </div>
+            ) : (
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                ИИ
+              </span>
+            )}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             {!collapsed && freeToolItems.length > 0 && (
-              <div className="mb-3">
-                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600/80">
-                  Бесплатно
-                </p>
+              <div className="mb-4">
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <span className="h-px flex-1 bg-emerald-500/25" />
+                  <span className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    Бесплатно
+                  </span>
+                  <span className="h-px flex-1 bg-emerald-500/25" />
+                </div>
                 {renderToolMenu(freeToolItems)}
               </div>
             )}
             {!collapsed && paidToolItems.length > 0 && (
               <div>
-                <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/60">
-                  Платно
-                </p>
+                <div className="mb-2 flex items-center gap-2 px-2">
+                  <span className="h-px flex-1 bg-primary/18" />
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                    Платно
+                  </span>
+                  <span className="h-px flex-1 bg-primary/18" />
+                </div>
                 {renderToolMenu(paidToolItems)}
               </div>
             )}
