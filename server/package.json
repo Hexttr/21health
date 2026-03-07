@@ -23,7 +23,6 @@
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.36.0",
-    "edge-tts-node": "^1.5.7",
     "fastify": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",

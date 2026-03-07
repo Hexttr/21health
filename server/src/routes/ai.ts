@@ -5,11 +5,9 @@ import { getProviderApiKey, getGeminiKey } from '../lib/provider-keys.js';
 import { getProviderAdapter } from '../lib/ai/provider-registry.js';
 import { ensureModelSupports, resolveRuntimeModel } from '../lib/ai/runtime.js';
 import { AIResolvedModel, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
-import { MsEdgeTTS, OUTPUT_FORMAT } from 'edge-tts-node';
 
 const DEFAULT_SYSTEM_PROMPT = 'Ты полезный AI-ассистент. Отвечай на русском языке, если пользователь пишет на русском. Давай четкие и полезные ответы. Используй форматирование Markdown когда это уместно.';
 const MAX_IMAGES = 14;
-const EDGE_TTS_MAX_TEXT_LENGTH = 2000;
 
 type BillingState = Awaited<ReturnType<typeof checkBilling>>;
 
@@ -72,15 +70,6 @@ function hasImageAttachments(messages: Array<{ images?: string[] }>): boolean {
 
 function exceedsImageLimit(messages: Array<{ images?: string[] }>): boolean {
   return messages.some((message) => Array.isArray(message.images) && message.images.length > MAX_IMAGES);
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }
 
 async function finalizeUsageBilling(params: {
@@ -309,51 +298,4 @@ export async function aiRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post<{
-    Body: {
-      text: string;
-      voice: 'ru-RU-SvetlanaNeural' | 'ru-RU-DmitryNeural';
-      rate?: string;
-    };
-  }>('/ai/tts', async (req, reply) => {
-    const payload = requireAuth(req, reply);
-    if (!payload) return;
-
-    const text = req.body?.text?.trim() || '';
-    const voice = req.body?.voice || 'ru-RU-SvetlanaNeural';
-    const rate = req.body?.rate || '+0%';
-
-    if (!text) {
-      return reply.status(400).send({ error: 'text обязателен' });
-    }
-
-    if (text.length > EDGE_TTS_MAX_TEXT_LENGTH) {
-      return reply.status(400).send({ error: `Текст слишком длинный. Максимум ${EDGE_TTS_MAX_TEXT_LENGTH} символов.` });
-    }
-
-    try {
-      const tts = new MsEdgeTTS({ enableLogger: false });
-      await tts.setMetadata(voice, OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS);
-      const stream = tts.toStream(escapeXml(text), { rate });
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-      tts.close();
-
-      const audioBuffer = Buffer.concat(chunks);
-      await logUsage(payload.userId, null, 'tts', {
-        inputTokens: 0,
-        outputTokens: 0,
-        baseCost: 0,
-        finalCost: 0,
-      }, false);
-
-      return reply.send({
-        audioDataUrl: `data:audio/webm;base64,${audioBuffer.toString('base64')}`,
-      });
-    } catch (error) {
-      return reply.status(502).send({ error: parseErrorMessage(error) });
-    }
-  });
 }

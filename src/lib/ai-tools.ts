@@ -18,7 +18,7 @@ export const aiTools: AIToolConfig[] = [
     modelPath: 'groq',
   },
   {
-    title: 'Edge TTS',
+    title: 'Озвучка',
     url: '/edge-tts',
     access: 'free',
     iconEmoji: '🎙',

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Download, Loader2, Mic, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Mic, Pause, Play, Square, Volume2 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { BalanceWidget } from '@/components/BalanceWidget';
 import { Button } from '@/components/ui/button';
@@ -11,42 +11,115 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api } from '@/api/client';
 import { toast } from 'sonner';
 
-const VOICES = [
-  { id: 'ru-RU-SvetlanaNeural', label: 'Женский голос', hint: 'Светлана' },
-  { id: 'ru-RU-DmitryNeural', label: 'Мужской голос', hint: 'Дмитрий' },
-] as const;
-
 const RATES = [
-  { id: '-10%', label: 'Медленнее' },
-  { id: '+0%', label: 'Нормально' },
-  { id: '+10%', label: 'Быстрее' },
+  { id: '0.9', label: 'Медленнее' },
+  { id: '1', label: 'Нормально' },
+  { id: '1.1', label: 'Быстрее' },
 ] as const;
 
 export default function EdgeTTS() {
   const [text, setText] = useState('');
-  const [voice, setVoice] = useState<(typeof VOICES)[number]['id']>('ru-RU-SvetlanaNeural');
-  const [rate, setRate] = useState<(typeof RATES)[number]['id']>('+0%');
-  const [audioDataUrl, setAudioDataUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [voice, setVoice] = useState('');
+  const [rate, setRate] = useState<(typeof RATES)[number]['id']>('1');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [isSupported, setIsSupported] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const generateSpeech = async () => {
-    if (!text.trim() || isLoading) return;
-    setIsLoading(true);
-    try {
-      const result = await api<{ audioDataUrl: string }>('/ai/tts', {
-        method: 'POST',
-        body: { text, voice, rate },
-      });
-      setAudioDataUrl(result.audioDataUrl);
-      toast.success('Озвучка готова');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Не удалось создать озвучку');
-    } finally {
-      setIsLoading(false);
+  const preferredVoices = useMemo(() => {
+    const russianVoices = availableVoices.filter((item) => item.lang.toLowerCase().startsWith('ru'));
+    const pool = russianVoices.length > 0 ? russianVoices : availableVoices;
+    return [...pool].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [availableVoices]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      setIsSupported(false);
+      return;
     }
+
+    setIsSupported(true);
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      setAvailableVoices(voices);
+      setVoice((current) => {
+        if (current || voices.length === 0) return current;
+        const russianVoice = voices.find((item) => item.lang.toLowerCase().startsWith('ru'));
+        return (russianVoice || voices[0]).voiceURI;
+      });
+    };
+
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  const startSpeech = () => {
+    if (!isSupported) {
+      toast.error('Ваш браузер не поддерживает Web Speech API');
+      return;
+    }
+
+    if (!text.trim()) return;
+
+    const synthesis = window.speechSynthesis;
+    synthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text.trim());
+    const selectedVoice = preferredVoices.find((item) => item.voiceURI === voice);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+    } else {
+      utterance.lang = 'ru-RU';
+    }
+    utterance.rate = Number(rate);
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+      setIsPaused(false);
+    };
+    utterance.onpause = () => setIsPaused(true);
+    utterance.onresume = () => setIsPaused(false);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setIsPaused(false);
+      utteranceRef.current = null;
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+      setIsPaused(false);
+      utteranceRef.current = null;
+      toast.error('Браузер не смог озвучить этот текст');
+    };
+
+    utteranceRef.current = utterance;
+    synthesis.speak(utterance);
+  };
+
+  const pauseSpeech = () => {
+    window.speechSynthesis.pause();
+    setIsPaused(true);
+  };
+
+  const resumeSpeech = () => {
+    window.speechSynthesis.resume();
+    setIsPaused(false);
+  };
+
+  const stopSpeech = () => {
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setIsSpeaking(false);
+    setIsPaused(false);
   };
 
   return (
@@ -60,8 +133,8 @@ export default function EdgeTTS() {
                 <Mic className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="font-serif text-lg font-semibold text-foreground leading-none">Edge TTS</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">Бесплатная озвучка текста</p>
+                <h1 className="font-serif text-lg font-semibold text-foreground leading-none">Озвучка в браузере</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">Web Speech API без сервера</p>
               </div>
             </div>
             <BalanceWidget compact />
@@ -76,7 +149,7 @@ export default function EdgeTTS() {
               </div>
               <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">Озвучьте текст бесплатно</h2>
               <p className="text-muted-foreground max-w-md leading-relaxed">
-                Два быстрых русских голоса через Edge TTS. Хорошо подходит для коротких озвучек, анонсов и черновых аудио.
+                Озвучка идёт прямо в вашем браузере через Web Speech API. Голоса и качество зависят от браузера и операционной системы.
               </p>
               <div className="mt-8 grid gap-3 w-full max-w-lg">
                 {[
@@ -98,21 +171,30 @@ export default function EdgeTTS() {
             </div>
 
             <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
+              {!isSupported && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900">
+                  Этот браузер не поддерживает озвучку через Web Speech API. Лучше всего работает в современных Chrome и Edge.
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">Голос</p>
                   <Select value={voice} onValueChange={(value) => setVoice(value as typeof voice)}>
-                    <SelectTrigger className="rounded-xl border-border/50 bg-secondary/30">
+                    <SelectTrigger className="rounded-xl border-border/50 bg-secondary/30" disabled={preferredVoices.length === 0}>
                       <SelectValue placeholder="Выберите голос" />
                     </SelectTrigger>
                     <SelectContent>
-                      {VOICES.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label} · {item.hint}
+                      {preferredVoices.map((item) => (
+                        <SelectItem key={item.voiceURI} value={item.voiceURI}>
+                          {item.name} · {item.lang}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground/70">
+                    Если русских голосов нет, браузер покажет доступные системные голоса.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -141,42 +223,71 @@ export default function EdgeTTS() {
                   className="min-h-[180px] rounded-2xl bg-secondary/30 border-border/50 focus:border-primary text-sm"
                 />
                 <p className="text-xs text-muted-foreground/70">
-                  До 2000 символов за запрос. Инструмент бесплатный и не списывает баланс.
+                  Текст не уходит на сервер. Нажатие запускает локальную озвучку в вашем браузере.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <Button
-                  onClick={generateSpeech}
-                  disabled={!text.trim() || isLoading}
+                  onClick={startSpeech}
+                  disabled={!text.trim() || !isSupported}
                   className="rounded-xl gradient-hero hover:opacity-90 shadow-glow"
                 >
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                  Сгенерировать озвучку
+                  <Play className="w-4 h-4 mr-2" />
+                  Озвучить
                 </Button>
-                {audioDataUrl && (
+                {isSpeaking && !isPaused && (
                   <Button
                     type="button"
                     variant="outline"
                     className="rounded-xl border-border/50"
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = audioDataUrl;
-                      link.download = `edge-tts-${Date.now()}.webm`;
-                      link.click();
-                    }}
+                    onClick={pauseSpeech}
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Скачать
+                    <Pause className="w-4 h-4 mr-2" />
+                    Пауза
+                  </Button>
+                )}
+                {isSpeaking && isPaused && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-border/50"
+                    onClick={resumeSpeech}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Продолжить
+                  </Button>
+                )}
+                {isSpeaking && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-border/50"
+                    onClick={stopSpeech}
+                  >
+                    <Square className="w-4 h-4 mr-2" />
+                    Стоп
                   </Button>
                 )}
               </div>
             </div>
 
-            {audioDataUrl && (
+            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-3">
+              <p className="text-sm font-medium text-foreground">Как это работает</p>
+              <div className="text-sm text-muted-foreground space-y-2">
+                <p>Инструмент использует встроенный синтез речи браузера и не создаёт аудиофайл на сервере.</p>
+                <p>В разных браузерах и на разных устройствах список голосов может отличаться.</p>
+                <p>Для стабильного результата лучше тестировать в `Chrome` или `Edge`.</p>
+              </div>
+            </div>
+
+            {isSpeaking && (
               <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-3">
-                <p className="text-sm font-medium text-foreground">Предпрослушивание</p>
-                <audio controls src={audioDataUrl} className="w-full" />
+                <p className="text-sm font-medium text-foreground">Статус</p>
+                <div className="flex items-center gap-2 text-sm text-primary">
+                  <Volume2 className="w-4 h-4" />
+                  {isPaused ? 'Озвучка на паузе' : 'Браузер сейчас озвучивает текст'}
+                </div>
               </div>
             )}
           </div>
