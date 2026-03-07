@@ -81,6 +81,18 @@ export async function aiModelsRoutes(app: FastifyInstance) {
     }
   );
 
+  // Admin: delete provider (cascades to models)
+  app.delete<{ Params: { id: string } }>('/admin/ai-providers/:id', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+    const id = req.params.id;
+    const [existing] = await db.select().from(aiProviders).where(eq(aiProviders.id, id));
+    if (!existing) return reply.status(404).send({ error: 'Провайдер не найден' });
+    await db.delete(platformSettings).where(eq(platformSettings.key, PROVIDER_API_KEY_PREFIX + id));
+    await db.delete(aiProviders).where(eq(aiProviders.id, id));
+    return reply.send({ success: true });
+  });
+
   // Admin: get provider API key status (masked)
   app.get<{ Params: { id: string } }>('/admin/ai-providers/:id/apikey', async (req, reply) => {
     const payload = getAuthFromRequest(req);

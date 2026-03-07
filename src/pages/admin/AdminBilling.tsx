@@ -14,6 +14,11 @@ function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider
   const [apiKey, setApiKey] = useState('');
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [edit, setEdit] = useState({ displayName: provider.displayName, apiKeyEnv: provider.apiKeyEnv || '', isActive: provider.isActive });
+  useEffect(() => {
+    setEdit({ displayName: provider.displayName, apiKeyEnv: provider.apiKeyEnv || '', isActive: provider.isActive });
+  }, [provider.displayName, provider.apiKeyEnv, provider.isActive]);
   useEffect(() => {
     api<{ hasKey: boolean; masked: string | null }>(`/admin/ai-providers/${provider.id}/apikey`)
       .then((r) => { setHasKey(r.hasKey); if (r.masked) setApiKey(r.masked); })
@@ -32,24 +37,68 @@ function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider
     } catch { toast.error('Ошибка сохранения'); }
     finally { setSaving(false); }
   };
+  const saveProvider = async () => {
+    setSaving(true);
+    try {
+      await api(`/admin/ai-providers/${provider.id}`, {
+        method: 'PUT',
+        body: { displayName: edit.displayName, apiKeyEnv: edit.apiKeyEnv || undefined, isActive: edit.isActive },
+      });
+      invalidateModelsCache();
+      toast.success('Провайдер обновлён');
+      onUpdate();
+    } catch { toast.error('Ошибка сохранения'); }
+    finally { setSaving(false); }
+  };
+  const deleteProvider = async () => {
+    if (modelCount > 0 && !confirm(`Удалить провайдера "${provider.displayName}"? Будут удалены ${modelCount} модель(ей).`)) return;
+    if (modelCount === 0 && !confirm(`Удалить провайдера "${provider.displayName}"?`)) return;
+    setDeleting(true);
+    try {
+      await api(`/admin/ai-providers/${provider.id}`, { method: 'DELETE' });
+      invalidateModelsCache();
+      toast.success('Провайдер удалён');
+      onUpdate();
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Ошибка удаления'); }
+    finally { setDeleting(false); }
+  };
   return (
-    <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-sm font-semibold">{provider.displayName}</p>
-          <p className="text-xs text-muted-foreground">key: {provider.name} | env: {provider.apiKeyEnv || '—'}</p>
+    <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">key: {provider.name}</span>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={edit.isActive} onChange={(e) => setEdit({ ...edit, isActive: e.target.checked })} />
+            Активен
+          </label>
+          <button onClick={deleteProvider} disabled={deleting} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
-        <span className={`text-xs px-2 py-1 rounded-full ${provider.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {provider.isActive ? 'Активен' : 'Выключен'}
-        </span>
       </div>
-      <div className="flex items-center gap-3 mb-2">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground">Отображаемое имя</label>
+          <input value={edit.displayName} onChange={(e) => setEdit({ ...edit, displayName: e.target.value })}
+            className="w-full h-8 rounded-lg border border-border/50 bg-secondary/30 px-2 text-xs outline-none focus:border-primary" />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Env переменная</label>
+          <input value={edit.apiKeyEnv} onChange={(e) => setEdit({ ...edit, apiKeyEnv: e.target.value })}
+            placeholder="GEMINI_API_KEY"
+            className="w-full h-8 rounded-lg border border-border/50 bg-secondary/30 px-2 text-xs outline-none focus:border-primary" />
+        </div>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap">
         <span className="text-xs text-muted-foreground">API-ключ: {hasKey === null ? '…' : hasKey ? apiKey || '••••' : 'не задан'}</span>
         <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={saveApiKey} disabled={saving}>
-          {saving ? '…' : hasKey ? 'Изменить' : 'Добавить'}
+          {saving ? '…' : hasKey ? 'Изменить ключ' : 'Добавить ключ'}
         </Button>
+        <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={saveProvider} disabled={saving}>
+          <Save className="w-3.5 h-3.5" /> Сохранить
+        </Button>
+        <span className="text-xs text-muted-foreground">Моделей: {modelCount}</span>
       </div>
-      <p className="text-xs text-muted-foreground">Моделей: {modelCount}</p>
     </div>
   );
 }
