@@ -1,3 +1,8 @@
+/** Сжатие для хранения в localStorage: 400px, quality 0.6, ~30–50KB */
+export async function resizeForStorage(dataUrl: string): Promise<string> {
+  return resizeImageForUpload(dataUrl, 400, 0.6);
+}
+
 /** Resize and compress image to avoid 413 / quota. Max 1024px, JPEG 0.82, target ~300KB */
 export async function resizeImageForUpload(
   dataUrl: string,

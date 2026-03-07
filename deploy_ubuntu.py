@@ -60,11 +60,7 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     if args:
         GEMINI_API_KEY = args[0]
-    if not GEMINI_API_KEY and not check_only:
-        print("Ошибка: задайте GEMINI_API_KEY.")
-        print("  Вариант 1: python deploy_ubuntu.py ВАШ_КЛЮЧ_GEMINI")
-        print("  Вариант 2: set GEMINI_API_KEY=ваш-ключ  (Windows) или export GEMINI_API_KEY=ваш-ключ (Linux)")
-        sys.exit(1)
+    # GEMINI_API_KEY не обязателен при повторном деплое — возьмём с сервера
 
     print("=== Развёртывание 21day-platform на 21day.club ===\n")
     print("Подключение к серверу...")
@@ -141,23 +137,37 @@ def main():
         jwt_secret_out, _, _ = run_ssh(client, "openssl rand -base64 32", check=False)
         jwt_secret = jwt_secret_out.strip() or "21day-dev-secret-change-in-production"
 
-        # Сохраняем DATABASE_URL если БД уже была и .env существует
+        # Сохраняем DATABASE_URL и GEMINI_API_KEY из существующего .env
         existing_env, _, _ = run_ssh(client, f"cat {DEPLOY_DIR}/server/.env 2>/dev/null || true", check=False)
         db_url_line = f'DATABASE_URL="postgresql://21day_user:{db_password}@localhost:5432/21day"'
+        gemini_key = GEMINI_API_KEY
+        if "DATABASE_URL=" in existing_env:
+            for line in existing_env.splitlines():
+                s = line.strip()
+                if s.startswith("DATABASE_URL="):
+                    db_url_line = s
+                    break
         if db_password == "PRESERVED":
-            if "DATABASE_URL=" in existing_env:
-                for line in existing_env.splitlines():
-                    if line.strip().startswith("DATABASE_URL="):
-                        db_url_line = line.strip()
-                        break
-            else:
-                db_url_line = 'DATABASE_URL="postgresql://21day_user:CHANGE_ME@localhost:5432/21day"'
-                print("Внимание: БД существует, но server/.env не найден. Задайте DATABASE_URL вручную после деплоя.")
+            pass  # уже подхватили выше
+        elif "DATABASE_URL=" not in existing_env:
+            db_url_line = 'DATABASE_URL="postgresql://21day_user:CHANGE_ME@localhost:5432/21day"'
+            print("Внимание: БД существует, но server/.env не найден. Задайте DATABASE_URL вручную после деплоя.")
+        if not gemini_key and "GEMINI_API_KEY=" in existing_env:
+            for line in existing_env.splitlines():
+                s = line.strip()
+                if s.startswith("GEMINI_API_KEY="):
+                    gemini_key = s.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+            if gemini_key:
+                print("Используем GEMINI_API_KEY с сервера (повторный деплой)")
+        if not gemini_key:
+            print("Ошибка: GEMINI_API_KEY не задан и не найден на сервере. Первый деплой? Передайте ключ: python deploy_ubuntu.py ВАШ_КЛЮЧ")
+            sys.exit(1)
 
         env_content = f"""# 21day-platform production
 {db_url_line}
 JWT_SECRET="{jwt_secret}"
-GEMINI_API_KEY="{GEMINI_API_KEY}"
+GEMINI_API_KEY="{gemini_key}"
 NODE_ENV=production
 PORT={APP_PORT}
 """

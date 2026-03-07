@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { ModelSelector } from '@/components/ModelSelector';
 import { useBalance } from '@/contexts/BalanceContext';
 import { useChatContext } from '@/contexts/ChatContext';
-import { resizeImageForUpload } from '@/lib/imageUtils';
+import { resizeImageForUpload, resizeForStorage } from '@/lib/imageUtils';
 
 const STORAGE_KEY = 'ai-chat-nanobanana';
 const MAX_IMAGES = 14;
@@ -22,8 +22,8 @@ type ImageMessage = {
   imageUrl: string;
 };
 
-/** Stored format - no base64 to avoid quota */
-type StoredMessage = { role: 'user'; content: string } | { role: 'assistant'; placeholder: true };
+/** Stored format: assistant stores compressed thumbnail (~30–50KB) for persistence */
+type StoredMessage = { role: 'user'; content: string } | { role: 'assistant'; imageUrl?: string };
 
 export function ImageGenerator() {
   const [messages, setMessages] = useState<ImageMessage[]>([]);
@@ -40,6 +40,9 @@ export function ImageGenerator() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  const PLACEHOLDER_SVG =
+    'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23ddd" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%23999" font-size="12">изображение</text></svg>';
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -48,7 +51,7 @@ export function ImageGenerator() {
         if (Array.isArray(parsed)) {
           const loaded: ImageMessage[] = parsed.map((m) => {
             if (m.role === 'user') return { role: 'user' as const, content: m.content };
-            return { role: 'assistant' as const, imageUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%23ddd" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%23999" font-size="12">изображение</text></svg>' };
+            return { role: 'assistant' as const, imageUrl: m.imageUrl || PLACEHOLDER_SVG };
           });
           setMessages(loaded);
         }
@@ -59,17 +62,35 @@ export function ImageGenerator() {
   }, []);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      const toStore: StoredMessage[] = messages.slice(-30).map((m) => {
-        if (m.role === 'user') return { role: 'user', content: m.content };
-        return { role: 'assistant', placeholder: true };
-      });
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
-      } catch (e) {
-        console.warn('localStorage quota:', e);
+    if (messages.length === 0) return;
+    let cancelled = false;
+    const run = async () => {
+      const toStore: StoredMessage[] = await Promise.all(
+        messages.slice(-30).map(async (m) => {
+          if (m.role === 'user') return { role: 'user', content: m.content };
+          if (m.role === 'assistant' && m.imageUrl && !m.imageUrl.includes('<svg')) {
+            try {
+              const compressed = await resizeForStorage(m.imageUrl);
+              return { role: 'assistant', imageUrl: compressed };
+            } catch {
+              return { role: 'assistant' };
+            }
+          }
+          return { role: 'assistant' };
+        })
+      );
+      if (!cancelled) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+        } catch (e) {
+          console.warn('localStorage quota:', e);
+        }
       }
-    }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [messages]);
 
   const willUseLastImage =
