@@ -106,12 +106,25 @@ export const aiProviders = pgTable('ai_providers', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const providerSecrets = pgTable('provider_secrets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  providerId: uuid('provider_id').notNull().unique().references(() => aiProviders.id, { onDelete: 'cascade' }),
+  encryptedValue: text('encrypted_value').notNull(),
+  keyVersion: integer('key_version').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const aiModels = pgTable('ai_models', {
   id: uuid('id').primaryKey().defaultRandom(),
   providerId: uuid('provider_id').notNull().references(() => aiProviders.id, { onDelete: 'cascade' }),
   modelKey: text('model_key').notNull(),
   displayName: text('display_name').notNull(),
   modelType: text('model_type', { enum: ['text', 'image'] }).notNull(),
+  supportsStreaming: boolean('supports_streaming').notNull().default(false),
+  supportsImageInput: boolean('supports_image_input').notNull().default(false),
+  supportsImageOutput: boolean('supports_image_output').notNull().default(false),
+  supportsSystemPrompt: boolean('supports_system_prompt').notNull().default(true),
   inputPricePer1k: numeric('input_price_per_1k', { precision: 10, scale: 6 }).default('0'),
   outputPricePer1k: numeric('output_price_per_1k', { precision: 10, scale: 6 }).default('0'),
   fixedPrice: numeric('fixed_price', { precision: 10, scale: 4 }).default('0'),
@@ -181,6 +194,7 @@ export type StudentProgress = typeof studentProgress.$inferSelect;
 export type PracticalMaterial = typeof practicalMaterials.$inferSelect;
 export type WaitlistEntry = typeof waitlist.$inferSelect;
 export type AIProvider = typeof aiProviders.$inferSelect;
+export type ProviderSecret = typeof providerSecrets.$inferSelect;
 export type AIModel = typeof aiModels.$inferSelect;
 export type UserBalance = typeof userBalances.$inferSelect;
 export type BalanceTransaction = typeof balanceTransactions.$inferSelect;

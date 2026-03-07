@@ -1,10 +1,19 @@
 import { FastifyInstance } from 'fastify';
 import { eq, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { aiProviders, aiModels, platformSettings } from '../db/schema.js';
+import { aiProviders, aiModels } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
-
-const PROVIDER_API_KEY_PREFIX = 'provider_apikey_';
+import {
+  ALLOWED_PLATFORM_SETTINGS,
+  getAllowedPlatformSettings,
+  updateAllowedPlatformSettings,
+} from '../lib/platform-settings.js';
+import {
+  clearProviderApiKey,
+  getProviderApiKeyStatus,
+  setProviderApiKey,
+} from '../lib/provider-keys.js';
+import { getActiveModels, invalidateAiModelCache } from '../lib/ai/catalog.js';
 
 export async function aiModelsRoutes(app: FastifyInstance) {
   // Public: list active models (for model selector)
@@ -12,18 +21,18 @@ export async function aiModelsRoutes(app: FastifyInstance) {
     const payload = getAuthFromRequest(req);
     if (!payload) return reply.status(401).send({ error: 'Не авторизован' });
 
-    const models = await db
-      .select({
-        id: aiModels.id,
-        modelKey: aiModels.modelKey,
-        displayName: aiModels.displayName,
-        modelType: aiModels.modelType,
-        providerId: aiModels.providerId,
-        sortOrder: aiModels.sortOrder,
-      })
-      .from(aiModels)
-      .where(eq(aiModels.isActive, true))
-      .orderBy(asc(aiModels.sortOrder));
+    const models = (await getActiveModels()).map((model) => ({
+      id: model.id,
+      modelKey: model.modelKey,
+      displayName: model.displayName,
+      modelType: model.modelType,
+      providerId: model.providerId,
+      sortOrder: model.sortOrder,
+      supportsStreaming: model.supportsStreaming,
+      supportsImageInput: model.supportsImageInput,
+      supportsImageOutput: model.supportsImageOutput,
+      supportsSystemPrompt: model.supportsSystemPrompt,
+    }));
 
     const providers = await db
       .select({ id: aiProviders.id, name: aiProviders.name, displayName: aiProviders.displayName })
@@ -50,33 +59,25 @@ export async function aiModelsRoutes(app: FastifyInstance) {
       const { name, displayName, apiKeyEnv } = req.body || {};
       if (!name?.trim() || !displayName?.trim()) return reply.status(400).send({ error: 'name и displayName обязательны' });
       const [row] = await db.insert(aiProviders).values({ name: name.trim(), displayName: displayName.trim(), apiKeyEnv: apiKeyEnv?.trim() || null }).returning();
+      invalidateAiModelCache();
       return reply.send(row);
     }
   );
 
   // Admin: update provider
-  app.put<{ Params: { id: string }; Body: { displayName?: string; apiKeyEnv?: string; apiKey?: string; isActive?: boolean } }>(
+  app.put<{ Params: { id: string }; Body: { displayName?: string; apiKeyEnv?: string; isActive?: boolean } }>(
     '/admin/ai-providers/:id',
     async (req, reply) => {
       const payload = getAuthFromRequest(req);
       if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
       const data = req.body || {};
-      if (data.apiKey !== undefined && data.apiKey !== '') {
-        await db.insert(platformSettings).values({
-          key: PROVIDER_API_KEY_PREFIX + req.params.id,
-          value: String(data.apiKey),
-          description: `API key for provider ${req.params.id}`,
-        }).onConflictDoUpdate({
-          target: platformSettings.key,
-          set: { value: String(data.apiKey), updatedAt: new Date() },
-        });
-      }
       const [row] = await db.update(aiProviders).set({
         ...(data.displayName !== undefined && { displayName: data.displayName }),
         ...(data.apiKeyEnv !== undefined && { apiKeyEnv: data.apiKeyEnv }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       }).where(eq(aiProviders.id, req.params.id)).returning();
       if (!row) return reply.status(404).send({ error: 'Not found' });
+      invalidateAiModelCache();
       return reply.send(row);
     }
   );
@@ -88,8 +89,9 @@ export async function aiModelsRoutes(app: FastifyInstance) {
     const id = req.params.id;
     const [existing] = await db.select().from(aiProviders).where(eq(aiProviders.id, id));
     if (!existing) return reply.status(404).send({ error: 'Провайдер не найден' });
-    await db.delete(platformSettings).where(eq(platformSettings.key, PROVIDER_API_KEY_PREFIX + id));
+    await clearProviderApiKey(id);
     await db.delete(aiProviders).where(eq(aiProviders.id, id));
+    invalidateAiModelCache();
     return reply.send({ success: true });
   });
 
@@ -97,8 +99,25 @@ export async function aiModelsRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/admin/ai-providers/:id/apikey', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
-    const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, PROVIDER_API_KEY_PREFIX + req.params.id));
-    return reply.send({ hasKey: !!row?.value, masked: row?.value ? '••••' + String(row.value).slice(-4) : null });
+    return reply.send(await getProviderApiKeyStatus(req.params.id));
+  });
+
+  // Admin: create/rotate provider API key (write-only)
+  app.put<{ Params: { id: string }; Body: { apiKey?: string } }>('/admin/ai-providers/:id/apikey', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+    const apiKey = req.body?.apiKey?.trim();
+    if (!apiKey) return reply.status(400).send({ error: 'API-ключ обязателен' });
+    await setProviderApiKey(req.params.id, apiKey);
+    return reply.send(await getProviderApiKeyStatus(req.params.id));
+  });
+
+  // Admin: clear stored provider API key (env fallback remains)
+  app.delete<{ Params: { id: string } }>('/admin/ai-providers/:id/apikey', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+    await clearProviderApiKey(req.params.id);
+    return reply.send(await getProviderApiKeyStatus(req.params.id));
   });
 
   // Admin: list all models
@@ -114,18 +133,38 @@ export async function aiModelsRoutes(app: FastifyInstance) {
     Body: {
       providerId: string; modelKey: string; displayName: string; modelType: 'text' | 'image';
       inputPricePer1k?: string; outputPricePer1k?: string; fixedPrice?: string;
+      supportsStreaming?: boolean; supportsImageInput?: boolean; supportsImageOutput?: boolean; supportsSystemPrompt?: boolean;
       isActive?: boolean; sortOrder?: number;
     };
   }>('/admin/ai-models', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
-    const { providerId, modelKey, displayName, modelType, inputPricePer1k, outputPricePer1k, fixedPrice, isActive, sortOrder } = req.body || {};
+    const {
+      providerId,
+      modelKey,
+      displayName,
+      modelType,
+      inputPricePer1k,
+      outputPricePer1k,
+      fixedPrice,
+      supportsStreaming,
+      supportsImageInput,
+      supportsImageOutput,
+      supportsSystemPrompt,
+      isActive,
+      sortOrder,
+    } = req.body || {};
     if (!providerId || !modelKey || !displayName || !modelType) return reply.status(400).send({ error: 'Missing required fields' });
     const [row] = await db.insert(aiModels).values({
       providerId, modelKey: modelKey.trim(), displayName: displayName.trim(), modelType,
+      supportsStreaming: supportsStreaming ?? modelType === 'text',
+      supportsImageInput: supportsImageInput ?? modelType === 'image',
+      supportsImageOutput: supportsImageOutput ?? modelType === 'image',
+      supportsSystemPrompt: supportsSystemPrompt ?? modelType === 'text',
       inputPricePer1k: inputPricePer1k || '0', outputPricePer1k: outputPricePer1k || '0',
       fixedPrice: fixedPrice || '0', isActive: isActive ?? true, sortOrder: sortOrder ?? 0,
     }).returning();
+    invalidateAiModelCache();
     return reply.send(row);
   });
 
@@ -140,6 +179,10 @@ export async function aiModelsRoutes(app: FastifyInstance) {
         ...(d.modelKey !== undefined && { modelKey: String(d.modelKey) }),
         ...(d.displayName !== undefined && { displayName: String(d.displayName) }),
         ...(d.modelType !== undefined && { modelType: String(d.modelType) as 'text' | 'image' }),
+        ...(d.supportsStreaming !== undefined && { supportsStreaming: Boolean(d.supportsStreaming) }),
+        ...(d.supportsImageInput !== undefined && { supportsImageInput: Boolean(d.supportsImageInput) }),
+        ...(d.supportsImageOutput !== undefined && { supportsImageOutput: Boolean(d.supportsImageOutput) }),
+        ...(d.supportsSystemPrompt !== undefined && { supportsSystemPrompt: Boolean(d.supportsSystemPrompt) }),
         ...(d.inputPricePer1k !== undefined && { inputPricePer1k: String(d.inputPricePer1k) }),
         ...(d.outputPricePer1k !== undefined && { outputPricePer1k: String(d.outputPricePer1k) }),
         ...(d.fixedPrice !== undefined && { fixedPrice: String(d.fixedPrice) }),
@@ -148,6 +191,7 @@ export async function aiModelsRoutes(app: FastifyInstance) {
         updatedAt: new Date(),
       }).where(eq(aiModels.id, req.params.id)).returning();
       if (!row) return reply.status(404).send({ error: 'Not found' });
+      invalidateAiModelCache();
       return reply.send(row);
     }
   );
@@ -157,6 +201,7 @@ export async function aiModelsRoutes(app: FastifyInstance) {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
     await db.delete(aiModels).where(eq(aiModels.id, req.params.id));
+    invalidateAiModelCache();
     return reply.send({ success: true });
   });
 
@@ -164,20 +209,21 @@ export async function aiModelsRoutes(app: FastifyInstance) {
   app.get('/admin/settings', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
-    const rows = await db.select().from(platformSettings);
-    const settings: Record<string, string> = {};
-    for (const r of rows) settings[r.key] = r.value;
-    return reply.send(settings);
+    return reply.send(await getAllowedPlatformSettings());
   });
 
   app.put<{ Body: Record<string, string> }>('/admin/settings', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
     const data = req.body || {};
-    for (const [key, value] of Object.entries(data)) {
-      await db.insert(platformSettings).values({ key, value: String(value) })
-        .onConflictDoUpdate({ target: platformSettings.key, set: { value: String(value), updatedAt: new Date() } });
+
+    for (const key of Object.keys(data)) {
+      if (!(ALLOWED_PLATFORM_SETTINGS as readonly string[]).includes(key)) {
+        return reply.status(400).send({ error: `Недопустимая настройка: ${key}` });
+      }
     }
+
+    await updateAllowedPlatformSettings(data);
     return reply.send({ success: true });
   });
 }

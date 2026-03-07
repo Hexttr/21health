@@ -1,40 +1,72 @@
-import { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { aiModels } from '../db/schema.js';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { getAuthFromRequest, JwtPayload } from '../lib/auth.js';
 import { checkBilling, calculateCost, deductBalance, logUsage, getMarkupPercent, UsageCost } from '../lib/billing.js';
 import { getProviderApiKey, getGeminiKey } from '../lib/provider-keys.js';
+import { getProviderAdapter } from '../lib/ai/provider-registry.js';
+import { ensureModelSupports, resolveRuntimeModel } from '../lib/ai/runtime.js';
+import { AIResolvedModel, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-const FALLBACK_CHAT_MODEL = 'gemini-2.5-flash';
-const FALLBACK_CHAT_LIST = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-const FALLBACK_IMAGE_MODEL = 'gemini-3-pro-image-preview';
-const FALLBACK_IMAGE_LIST = ['gemini-3-pro-image-preview'];
-
-const GEMINI_STREAM_URL = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent`;
-const GEMINI_GENERATE_URL = (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-async function resolveModel(modelId: string | undefined, modelType: 'text' | 'image') {
-  if (modelId) {
-    const [model] = await db.select().from(aiModels).where(eq(aiModels.id, modelId));
-    if (model?.isActive) return model;
-  }
-  // Default: first active model of this type
-  const [model] = await db
-    .select()
-    .from(aiModels)
-    .where(eq(aiModels.modelType, modelType))
-    .orderBy(aiModels.sortOrder)
-    .limit(1);
-  return model || null;
-}
+const DEFAULT_SYSTEM_PROMPT = 'Ты полезный AI-ассистент. Отвечай на русском языке, если пользователь пишет на русском. Давай четкие и полезные ответы. Используй форматирование Markdown когда это уместно.';
+const MAX_IMAGES = 14;
 
 function requireAuth(req: Parameters<typeof getAuthFromRequest>[0], reply: { status: (code: number) => { send: (body: unknown) => unknown } }): JwtPayload | null {
   const payload = getAuthFromRequest(req);
   if (!payload) { reply.status(401).send({ error: 'Требуется авторизация' }); return null; }
   return payload;
+}
+
+function parseErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.error?.message || parsed?.error || raw;
+  } catch {
+    return raw;
+  }
+}
+
+function parseMoney(value: string | null | undefined): number {
+  return parseFloat(value || '0');
+}
+
+function writeSseChunk(reply: FastifyReply, text: string): void {
+  reply.raw.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+}
+
+async function resolveKeyOrReply(model: AIResolvedModel, reply: FastifyReply): Promise<string | null> {
+  const key = await getProviderApiKey(model.providerId);
+  if (!key) {
+    reply.status(500).send({ error: `API-ключ для провайдера "${model.providerName}" не настроен` });
+    return null;
+  }
+  return key;
+}
+
+async function finalizeUsageBilling(params: {
+  payload: JwtPayload;
+  model: AIResolvedModel;
+  billing: Awaited<ReturnType<typeof checkBilling>>;
+  requestType: 'chat' | 'image' | 'quiz';
+  usage: { inputTokens: number; outputTokens: number };
+  description: string;
+}): Promise<UsageCost> {
+  const markup = await getMarkupPercent();
+  const cost = calculateCost(
+    params.model.modelType,
+    parseMoney(params.model.inputPricePer1k),
+    parseMoney(params.model.outputPricePer1k),
+    parseMoney(params.model.fixedPrice),
+    params.usage.inputTokens,
+    params.usage.outputTokens,
+    markup,
+  );
+
+  const usageId = await logUsage(params.payload.userId, params.model.id, params.requestType, cost, params.billing.isFree);
+  if (!params.billing.isFree && cost.finalCost > 0) {
+    await deductBalance(params.payload.userId, cost.finalCost, params.description, usageId);
+  }
+
+  return cost;
 }
 
 export async function aiRoutes(app: FastifyInstance) {
@@ -44,7 +76,9 @@ export async function aiRoutes(app: FastifyInstance) {
     const key = await getGeminiKey();
     if (!key) return reply.status(500).send({ error: 'API-ключ Gemini не настроен' });
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+        headers: { 'x-goog-api-key': key },
+      });
       const data = await res.json();
       if (!res.ok) return reply.status(res.status).send(data);
       const models = (data.models || []).map((m: { name: string; supportedGenerationMethods?: string[] }) => ({
@@ -52,107 +86,65 @@ export async function aiRoutes(app: FastifyInstance) {
         methods: m.supportedGenerationMethods,
       }));
       return reply.send({ models });
-    } catch (e) { return reply.status(500).send({ error: String(e) }); }
+    } catch (e) {
+      return reply.status(500).send({ error: String(e) });
+    }
   });
 
-  // ── AI Chat (streaming) ──
   app.post<{
-    Body: { messages: Array<{ role: string; content: string }>; model?: string; modelId?: string };
+    Body: { messages: Array<{ role: string; content: string }>; modelId?: string };
   }>('/ai/chat', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
 
     const { messages = [], modelId } = req.body || {};
-    const dbModel = await resolveModel(modelId, 'text');
-    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
-    const key = apiKey || GEMINI_API_KEY;
-    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
+    const model = await resolveRuntimeModel(modelId, 'text');
+    if (!model) return reply.status(400).send({ error: 'Нет активной текстовой модели' });
+
+    try {
+      ensureModelSupports(model, 'streaming');
+    } catch (error) {
+      return reply.status(400).send({ error: parseErrorMessage(error) });
+    }
+
+    const key = await resolveKeyOrReply(model, reply);
+    if (!key) return;
 
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
-    const modelKey = dbModel?.modelKey || FALLBACK_CHAT_MODEL;
-    const modelsToTry = dbModel ? [modelKey] : FALLBACK_CHAT_LIST;
-
-    const contents = messages.map((m) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    }));
-    const systemInstruction = {
-      parts: [{ text: 'Ты полезный AI-ассистент. Отвечай на русском языке, если пользователь пишет на русском. Давай четкие и полезные ответы. Используй форматирование Markdown когда это уместно.' }],
-    };
-
-    let res: Response | null = null;
-    let lastErr = '';
-    for (const model of modelsToTry) {
-      const url = `${GEMINI_STREAM_URL(model)}?key=${key}&alt=sse`;
-      res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemInstruction, contents, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } }),
-      });
-      if (res.ok) break;
-      lastErr = await res.text();
-      if (res.status !== 404) return reply.status(res.status).send({ error: lastErr || 'AI error' });
-    }
-    if (!res || !res.ok) {
-      const msg = (() => { try { const e = JSON.parse(lastErr); return e?.error?.message || e?.error || lastErr; } catch { return lastErr || 'AI model not found'; } })();
-      return reply.status(502).send({ error: msg });
-    }
-
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    const reader = res.body?.getReader();
-    if (!reader) return reply.raw.end();
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6);
-            if (jsonStr === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(jsonStr);
-              if (parsed.usageMetadata) usageMetadata = parsed.usageMetadata;
-              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text) reply.raw.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
-            } catch { /* skip */ }
-          }
-        }
-      }
+      const adapter = getProviderAdapter(model.providerName);
+      const result = await adapter.streamChat({
+        apiKey: key,
+        model,
+        messages: messages.map((message) => ({
+          role: message.role === 'assistant' ? 'assistant' : message.role === 'system' ? 'system' : 'user',
+          content: message.content,
+        })),
+        systemPrompt: DEFAULT_SYSTEM_PROMPT,
+        onDelta: (text) => writeSseChunk(reply, text),
+      });
+
+      await finalizeUsageBilling({
+        payload,
+        model,
+        billing,
+        requestType: 'chat',
+        usage: result.usage,
+        description: `Chat: ${result.usage.inputTokens}+${result.usage.outputTokens} tokens`,
+      });
+
+      reply.raw.write('data: [DONE]\n\n');
+    } catch (error) {
+      reply.raw.write(`data: ${JSON.stringify({ error: parseErrorMessage(error) })}\n\n`);
     } finally {
-      reader.releaseLock();
+      reply.raw.end();
     }
-
-    // Bill BEFORE sending [DONE] so client sees updated balance
-    const inputTokens = usageMetadata?.promptTokenCount || 0;
-    const outputTokens = usageMetadata?.candidatesTokenCount || 0;
-    const markup = await getMarkupPercent();
-    const cost = calculateCost(
-      'text',
-      parseFloat(dbModel?.inputPricePer1k || '0'),
-      parseFloat(dbModel?.outputPricePer1k || '0'),
-      0, inputTokens, outputTokens, markup
-    );
-    const usageId = await logUsage(payload.userId, dbModel?.id || null, 'chat', cost, billing.isFree);
-    if (!billing.isFree && cost.finalCost > 0) {
-      await deductBalance(payload.userId, cost.finalCost, `Chat: ${inputTokens}+${outputTokens} tokens`, usageId);
-    }
-
-    reply.raw.write('data: [DONE]\n\n');
-    reply.raw.end();
   });
 
-  // ── AI Image generation ──
-  const MAX_IMAGES = 14;
   app.post<{
     Body: { prompt: string; image?: string; images?: string[]; modelId?: string };
   }>('/ai/image', async (req, reply) => {
@@ -162,239 +154,109 @@ export async function aiRoutes(app: FastifyInstance) {
     const { prompt, image, images: imagesRaw, modelId } = req.body || {};
     if (!prompt?.trim()) return reply.status(400).send({ error: 'prompt обязателен' });
 
-    const dbModel = await resolveModel(modelId, 'image');
-    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
-    const key = apiKey || GEMINI_API_KEY;
-    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
+    const model = await resolveRuntimeModel(modelId, 'image');
+    if (!model) return reply.status(400).send({ error: 'Нет активной image-модели' });
+
+    const key = await resolveKeyOrReply(model, reply);
+    if (!key) return;
 
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
-    const modelKey = dbModel?.modelKey || FALLBACK_IMAGE_MODEL;
-    const modelsToTry = dbModel ? [modelKey] : FALLBACK_IMAGE_LIST;
-
     const imageList = Array.isArray(imagesRaw) ? imagesRaw : (image ? [image] : []);
     if (imageList.length > MAX_IMAGES) return reply.status(400).send({ error: `Максимум ${MAX_IMAGES} изображений` });
-
-    const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
-      { text: prompt.trim() },
-    ];
-    for (const img of imageList) {
-      const base64 = String(img).replace(/^data:image\/\w+;base64,/, '');
-      const mime = img.startsWith('data:image/') ? (img.match(/^data:(image\/\w+);/)?.[1] || 'image/png') : 'image/png';
-      parts.push({ inlineData: { mimeType: mime, data: base64 } });
+    if (imageList.length > 0 && !model.supportsImageInput) {
+      return reply.status(400).send({ error: `Модель "${model.displayName}" не поддерживает входные изображения` });
+    }
+    if (!model.supportsImageOutput) {
+      return reply.status(400).send({ error: `Модель "${model.displayName}" не поддерживает генерацию изображений` });
     }
 
-    let res: Response | null = null;
-    let lastErr = '';
-    for (const model of modelsToTry) {
-      const url = `${GEMINI_GENERATE_URL(model)}?key=${key}`;
-      res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-        }),
+    try {
+      const adapter = getProviderAdapter(model.providerName);
+      const result = await adapter.generateImage({
+        apiKey: key,
+        model,
+        prompt,
+        images: imageList,
       });
-      if (res.ok) break;
-      lastErr = await res.text();
-      // Try next model on any error (404, 500, etc.)
-    }
-    if (!res || !res.ok) {
-      const msg = (() => {
-        try {
-          const e = JSON.parse(lastErr);
-          return e?.error?.message || e?.error || lastErr;
-        } catch {
-          return lastErr || 'Image model not found';
-        }
-      })();
-      console.error('[ai/image] API error', res?.status, modelKey, msg.slice(0, 200));
-      return reply.status(502).send({ error: msg });
-    }
 
-    const data = await res.json();
-    const candidate = data.candidates?.[0];
-    const content = candidate?.content?.parts;
-    let imageUrl: string | null = null;
-    if (content) {
-      for (const part of content) {
-        // API may return inlineData (camelCase) or inline_data (snake_case)
-        const p = part as Record<string, unknown>;
-        const inline = (p.inlineData ?? p.inline_data) as { mimeType?: string; mime_type?: string; data: string } | undefined;
-        const mime = inline?.mimeType ?? inline?.mime_type;
-        const b64 = inline?.data;
-        if (b64) {
-          imageUrl = `data:${mime || 'image/png'};base64,${b64}`;
-          break;
-        }
-      }
-    }
-    if (!imageUrl) {
-      const errDetail = candidate?.finishReason || data.promptFeedback?.blockReason || 'no image in response';
-      console.error('[ai/image] No image in response:', errDetail, 'parts:', JSON.stringify(content?.slice(0, 2)));
-      return reply.status(500).send({ error: `Не удалось сгенерировать изображение: ${errDetail}` });
-    }
+      const cost = await finalizeUsageBilling({
+        payload,
+        model,
+        billing,
+        requestType: 'image',
+        usage: result.usage,
+        description: 'Image generation',
+      });
 
-    // Bill ONLY on success — never on 502/500 returns above
-    const markup = await getMarkupPercent();
-    const cost = calculateCost('image', 0, 0, parseFloat(dbModel?.fixedPrice || '0'), 0, 0, markup);
-    const usageId = await logUsage(payload.userId, dbModel?.id || null, 'image', cost, billing.isFree);
-    if (!billing.isFree && cost.finalCost > 0) {
-      await deductBalance(payload.userId, cost.finalCost, 'Image generation', usageId);
+      return reply.send({
+        imageUrl: result.imageUrl,
+        cost: { finalCost: cost.finalCost, isFree: billing.isFree },
+      });
+    } catch (error) {
+      return reply.status(502).send({ error: parseErrorMessage(error) });
     }
-
-    return reply.send({ imageUrl, cost: { finalCost: cost.finalCost, isFree: billing.isFree } });
   });
 
-  // ── AI Quiz (tool calling) ──
   app.post<{
     Body: {
-      lessonTitle: string; lessonDescription: string; videoTopics: string[];
-      userAnswer?: string; conversationHistory?: Array<{ role: string; content: string }>;
+      lessonTitle: string;
+      lessonDescription: string;
+      videoTopics: string[];
+      userAnswer?: string;
+      conversationHistory?: Array<{ role: string; content: string }>;
       customPrompt?: string;
-      learningState?: { criteria: Array<{ id: string; topic: string; description: string; passed: boolean }>; current_criterion: string; all_passed: boolean };
+      learningState?: QuizLearningState;
     };
   }>('/ai/quiz', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
 
-    const dbModel = await resolveModel(undefined, 'text');
-    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
-    const key = apiKey || GEMINI_API_KEY;
-    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
+    const model = await resolveRuntimeModel(undefined, 'text');
+    if (!model) return reply.status(400).send({ error: 'Нет активной текстовой модели для квиза' });
+
+    const key = await resolveKeyOrReply(model, reply);
+    if (!key) return;
 
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
     const { lessonTitle, lessonDescription, videoTopics = [], userAnswer, conversationHistory = [], customPrompt, learningState } = req.body || {};
 
-    const chatModel = dbModel?.modelKey || FALLBACK_CHAT_MODEL;
+    try {
+      const adapter = getProviderAdapter(model.providerName);
+      const result = await adapter.runQuiz({
+        apiKey: key,
+        model,
+        lessonTitle,
+        lessonDescription,
+        videoTopics,
+        userAnswer,
+        conversationHistory: conversationHistory as QuizConversationMessage[],
+        customPrompt,
+        learningState,
+      });
 
-    const isInitialization = conversationHistory.length === 0;
-    let systemPrompt: string;
+      await finalizeUsageBilling({
+        payload,
+        model,
+        billing,
+        requestType: 'quiz',
+        usage: result.usage,
+        description: `Quiz: ${result.usage.inputTokens}+${result.usage.outputTokens} tokens`,
+      });
 
-    if (isInitialization) {
-      systemPrompt = `Ты — AI-тьютор. Курс: AI для помогающих специалистов.
-
-## Урок: ${lessonTitle}
-${lessonDescription}
-Темы из видео: ${videoTopics.join(', ')}
-${customPrompt ? `\nДополнительные инструкции: ${customPrompt}` : ''}
-
-## ТВОЯ ЗАДАЧА:
-1. Создай 3-4 критерия для проверки понимания урока (по ключевым темам из видео)
-2. Поприветствуй студента и задай первый вопрос по критерию c1
-
-## ПРАВИЛА:
-- Критерии должны быть конкретными и проверяемыми
-- Вопросы должны быть открытыми (не да/нет)
-- Все критерии начинаются с passed: false
-- current_criterion: "c1"
-- all_passed: false`;
-    } else {
-      const currentCrit = learningState?.criteria?.find((c: { id: string }) => c.id === learningState.current_criterion);
-      const currentTopic = currentCrit?.topic || 'текущая тема';
-      const currentDesc = currentCrit?.description || '';
-      const passedCriteria = learningState?.criteria?.filter((c: { passed: boolean }) => c.passed) || [];
-      const remainingCriteria = learningState?.criteria?.filter((c: { passed: boolean }) => !c.passed) || [];
-
-      systemPrompt = `Ты — AI-тьютор. Оцени последний ответ студента.
-
-## Урок: ${lessonTitle}
-${customPrompt ? `Инструкции: ${customPrompt}` : ''}
-
-## ТЕКУЩИЙ КРИТЕРИЙ: ${learningState?.current_criterion}
-Тема: "${currentTopic}"
-Проверяем: ${currentDesc}
-
-## ПРОГРЕСС: ${passedCriteria.length}/${learningState?.criteria?.length || 0} критериев пройдено
-Пройдены: ${passedCriteria.map((c: { id: string }) => c.id).join(', ') || 'нет'}
-Осталось: ${remainingCriteria.map((c: { id: string }) => c.id).join(', ')}
-
-## ПРАВИЛА ОЦЕНКИ:
-1. Если ответ показывает понимание темы → passed: true для текущего критерия
-2. После прохождения критерия → current_criterion = следующий непройденный
-3. Если НЕ понял → задай уточняющий вопрос, passed остаётся false
-4. Когда ВСЕ критерии passed: true → all_passed: true
-
-## ТЕКУЩЕЕ СОСТОЯНИЕ (изменяй только нужные поля):
-${JSON.stringify(learningState, null, 2)}`;
-    }
-
-    const msgArr: Array<{ role: string; parts: Array<{ text: string }> }> = [
-      { role: 'user', parts: [{ text: systemPrompt }] },
-    ];
-    for (const msg of conversationHistory) {
-      msgArr.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
-    }
-    if (isInitialization) msgArr.push({ role: 'user', parts: [{ text: 'Начни обучающую сессию.' }] });
-    else if (userAnswer) msgArr.push({ role: 'user', parts: [{ text: userAnswer }] });
-
-    const tools = [{
-      functionDeclarations: [{
-        name: 'update_learning_state',
-        description: 'Обновить состояние обучения. ВСЕГДА используй эту функцию для ответа.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            criteria: { type: 'ARRAY', items: { type: 'OBJECT', properties: { id: { type: 'STRING' }, topic: { type: 'STRING' }, description: { type: 'STRING' }, passed: { type: 'BOOLEAN' } } } },
-            current_criterion: { type: 'STRING' },
-            all_passed: { type: 'BOOLEAN' },
-            message: { type: 'STRING' },
-          },
-          required: ['criteria', 'current_criterion', 'all_passed', 'message'],
-        },
-      }],
-    }];
-
-    const url = `${GEMINI_GENERATE_URL(chatModel)}?key=${key}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: msgArr,
-        tools,
-        toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['update_learning_state'] } },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      return reply.status(res.status).send({ error: err || 'AI quiz error' });
-    }
-
-    const data = await res.json();
-    const candidate = data.candidates?.[0];
-    const fc = candidate?.content?.parts?.[0]?.functionCall;
-
-    // Bill quiz request
-    const usageMeta = data.usageMetadata;
-    const inputTokens = usageMeta?.promptTokenCount || 0;
-    const outputTokens = usageMeta?.candidatesTokenCount || 0;
-    const markup = await getMarkupPercent();
-    const cost = calculateCost('text', parseFloat(dbModel?.inputPricePer1k || '0'), parseFloat(dbModel?.outputPricePer1k || '0'), 0, inputTokens, outputTokens, markup);
-    const usageId = await logUsage(payload.userId, dbModel?.id || null, 'quiz', cost, billing.isFree);
-    if (!billing.isFree && cost.finalCost > 0) {
-      await deductBalance(payload.userId, cost.finalCost, `Quiz: ${inputTokens}+${outputTokens} tokens`, usageId);
-    }
-
-    if (!fc || fc.name !== 'update_learning_state') {
+      return reply.send({
+        response: result.response,
+        learningState: result.learningState,
+        allPassed: result.allPassed,
+      });
+    } catch (error) {
       if (learningState) {
         return reply.send({ response: 'Произошла ошибка обработки. Попробуйте повторить ваш ответ.', learningState, allPassed: false });
       }
-      return reply.status(500).send({ error: 'AI не вернул структурированный ответ' });
+      return reply.status(502).send({ error: parseErrorMessage(error) });
     }
-
-    let args: { criteria: Array<{ id: string; topic: string; description: string; passed: boolean }>; current_criterion: string; all_passed: boolean; message: string };
-    try { args = typeof fc.args === 'string' ? JSON.parse(fc.args) : fc.args; }
-    catch { return reply.status(500).send({ error: 'Ошибка парсинга ответа AI' }); }
-
-    return reply.send({
-      response: args.message,
-      learningState: { criteria: args.criteria, current_criterion: args.current_criterion, all_passed: args.all_passed },
-      allPassed: args.all_passed === true,
-    });
   });
 }

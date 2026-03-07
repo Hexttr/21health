@@ -3,40 +3,95 @@ import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Settings, Database, Save, Plus, Trash2, Loader2, DollarSign } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Settings, Database, Save, Plus, Trash2, Loader2, DollarSign, KeyRound } from 'lucide-react';
 import { invalidateModelsCache } from '@/components/ModelSelector';
 
 interface AIProvider {
   id: string; name: string; displayName: string; apiKeyEnv: string | null; isActive: boolean;
 }
 
+interface ProviderKeyStatus {
+  hasStoredKey: boolean;
+  masked: string | null;
+  envVar: string | null;
+  usesEnvFallback: boolean;
+}
+
+const SETTINGS_FIELDS = [
+  { key: 'markup_percent', label: 'Наценка на AI-запросы (%)', hint: 'Процент наценки поверх базовой стоимости', type: 'number' as const },
+  { key: 'daily_free_requests', label: 'Бесплатных запросов в день', hint: 'Количество бесплатных AI-запросов для каждого пользователя', type: 'number' as const },
+  { key: 'min_topup_amount', label: 'Мин. сумма пополнения (₽)', hint: '', type: 'number' as const },
+  { key: 'max_topup_amount', label: 'Макс. сумма пополнения (₽)', hint: '', type: 'number' as const },
+  { key: 'free_for_admins', label: 'Бесплатно для администраторов', hint: 'Админы не тратят баланс при использовании AI (чат, изображения, квиз)', type: 'boolean' as const },
+] as const;
+
 function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider; modelCount: number; onUpdate: () => void }) {
-  const [apiKey, setApiKey] = useState('');
-  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [keyStatus, setKeyStatus] = useState<ProviderKeyStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [keyValue, setKeyValue] = useState('');
   const [edit, setEdit] = useState({ displayName: provider.displayName, apiKeyEnv: provider.apiKeyEnv || '', isActive: provider.isActive });
+
   useEffect(() => {
     setEdit({ displayName: provider.displayName, apiKeyEnv: provider.apiKeyEnv || '', isActive: provider.isActive });
   }, [provider.displayName, provider.apiKeyEnv, provider.isActive]);
+
+  const loadKeyStatus = async () => {
+    try {
+      const status = await api<ProviderKeyStatus>(`/admin/ai-providers/${provider.id}/apikey`);
+      setKeyStatus(status);
+    } catch {
+      setKeyStatus(null);
+    }
+  };
+
   useEffect(() => {
-    api<{ hasKey: boolean; masked: string | null }>(`/admin/ai-providers/${provider.id}/apikey`)
-      .then((r) => { setHasKey(r.hasKey); if (r.masked) setApiKey(r.masked); })
-      .catch(() => setHasKey(false));
+    loadKeyStatus();
   }, [provider.id]);
+
   const saveApiKey = async () => {
-    const raw = prompt('Введите API-ключ (оставьте пустым, чтобы не менять):');
-    if (raw === null) return;
+    if (!keyValue.trim()) {
+      toast.error('Введите API-ключ');
+      return;
+    }
     setSaving(true);
     try {
-      await api(`/admin/ai-providers/${provider.id}`, { method: 'PUT', body: { apiKey: raw || undefined } });
-      setHasKey(!!raw);
-      if (raw) setApiKey('••••' + raw.slice(-4));
-      toast.success(raw ? 'Ключ сохранён' : 'Ключ не изменён');
+      const status = await api<ProviderKeyStatus>(`/admin/ai-providers/${provider.id}/apikey`, { method: 'PUT', body: { apiKey: keyValue } });
+      setKeyStatus(status);
+      setKeyValue('');
+      setKeyDialogOpen(false);
+      toast.success('Ключ сохранён');
       onUpdate();
     } catch { toast.error('Ошибка сохранения'); }
     finally { setSaving(false); }
   };
+
+  const clearApiKey = async () => {
+    if (!confirm(`Удалить сохранённый API-ключ для "${provider.displayName}"?`)) return;
+    setSaving(true);
+    try {
+      const status = await api<ProviderKeyStatus>(`/admin/ai-providers/${provider.id}/apikey`, { method: 'DELETE' });
+      setKeyStatus(status);
+      toast.success('Сохранённый ключ удалён');
+      onUpdate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка удаления ключа');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveProvider = async () => {
     setSaving(true);
     try {
@@ -90,20 +145,66 @@ function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider
         </div>
       </div>
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">API-ключ: {hasKey === null ? '…' : hasKey ? apiKey || '••••' : 'не задан'}</span>
-        <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={saveApiKey} disabled={saving}>
-          {saving ? '…' : hasKey ? 'Изменить ключ' : 'Добавить ключ'}
+        <span className="text-xs text-muted-foreground">
+          API-ключ: {keyStatus?.hasStoredKey ? keyStatus.masked || '••••' : 'не сохранён'}
+          {keyStatus?.usesEnvFallback ? `, fallback: ${keyStatus.envVar}` : keyStatus?.envVar ? `, env: ${keyStatus.envVar}` : ''}
+        </span>
+        <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={() => setKeyDialogOpen(true)} disabled={saving}>
+          <KeyRound className="w-3.5 h-3.5" />
+          {keyStatus?.hasStoredKey ? 'Заменить ключ' : 'Задать ключ'}
         </Button>
+        {keyStatus?.hasStoredKey && (
+          <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={clearApiKey} disabled={saving}>
+            Удалить ключ
+          </Button>
+        )}
         <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={saveProvider} disabled={saving}>
           <Save className="w-3.5 h-3.5" /> Сохранить
         </Button>
         <span className="text-xs text-muted-foreground">Моделей: {modelCount}</span>
       </div>
+
+      <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">API-ключ провайдера</DialogTitle>
+            <DialogDescription>
+              Ключ сохраняется только на сервере и после записи больше не возвращается в браузер. При отсутствии сохранённого ключа будет использован `env`, если он задан.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor={`provider-key-${provider.id}`}>Новый API-ключ</Label>
+              <Input
+                id={`provider-key-${provider.id}`}
+                type="password"
+                value={keyValue}
+                onChange={(e) => setKeyValue(e.target.value)}
+                placeholder="Введите новый ключ"
+                className="rounded-xl bg-secondary/30 border-border/50"
+                autoComplete="off"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Текущий статус: {keyStatus?.hasStoredKey ? `сохранён (${keyStatus.masked})` : 'не сохранён'}
+              {keyStatus?.usesEnvFallback ? `, используется env ${keyStatus.envVar}` : keyStatus?.envVar ? `, env ${keyStatus.envVar} доступен как fallback` : ''}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setKeyDialogOpen(false); setKeyValue(''); }} className="rounded-xl">Отмена</Button>
+            <Button onClick={saveApiKey} disabled={saving} className="rounded-xl">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Сохранить ключ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 interface AIModel {
   id: string; providerId: string; modelKey: string; displayName: string; modelType: string;
+  supportsStreaming: boolean; supportsImageInput: boolean; supportsImageOutput: boolean; supportsSystemPrompt: boolean;
   inputPricePer1k: string; outputPricePer1k: string; fixedPrice: string;
   isActive: boolean; sortOrder: number;
 }
@@ -118,15 +219,25 @@ export default function AdminBilling() {
 
   useEffect(() => { loadAll(); }, []);
 
+  const loadSettings = async () => {
+    const data = await api<Settings>('/admin/settings');
+    setSettings(data);
+  };
+
+  const loadProviders = async () => {
+    const data = await api<AIProvider[]>('/admin/ai-providers');
+    setProviders(data);
+  };
+
+  const loadModels = async () => {
+    const data = await api<AIModel[]>('/admin/ai-models');
+    setModels(data);
+  };
+
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [p, m, s] = await Promise.all([
-        api<AIProvider[]>('/admin/ai-providers'),
-        api<AIModel[]>('/admin/ai-models'),
-        api<Settings>('/admin/settings'),
-      ]);
-      setProviders(p); setModels(m); setSettings(s);
+      await Promise.all([loadProviders(), loadModels(), loadSettings()]);
     } catch (e) { toast.error('Ошибка загрузки'); }
     finally { setLoading(false); }
   };
@@ -223,11 +334,7 @@ export default function AdminBilling() {
               <h2 className="font-serif text-lg font-semibold">Настройки платформы</h2>
             </div>
             {[
-              { key: 'markup_percent', label: 'Наценка на AI-запросы (%)', hint: 'Процент наценки поверх базовой стоимости', type: 'number' as const },
-              { key: 'daily_free_requests', label: 'Бесплатных запросов в день', hint: 'Количество бесплатных AI-запросов для каждого пользователя', type: 'number' as const },
-              { key: 'min_topup_amount', label: 'Мин. сумма пополнения (₽)', hint: '', type: 'number' as const },
-              { key: 'max_topup_amount', label: 'Макс. сумма пополнения (₽)', hint: '', type: 'number' as const },
-              { key: 'free_for_admins', label: 'Бесплатно для администраторов', hint: 'Админы не тратят баланс при использовании AI (чат, изображения, квиз)', type: 'boolean' as const },
+              ...SETTINGS_FIELDS,
             ].map(({ key, label, hint, type }) => (
               <div key={key}>
                 <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
@@ -333,6 +440,24 @@ export default function AdminBilling() {
                     <input value={model.fixedPrice} onChange={(e) => updateModelField(model.id, 'fixedPrice', e.target.value)}
                       className="w-full h-8 rounded-lg border border-border/50 bg-secondary/30 px-2 text-xs outline-none focus:border-primary" />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { key: 'supportsStreaming', label: 'Streaming' },
+                    { key: 'supportsImageInput', label: 'Image input' },
+                    { key: 'supportsImageOutput', label: 'Image output' },
+                    { key: 'supportsSystemPrompt', label: 'System prompt' },
+                  ].map((capability) => (
+                    <label key={capability.key} className="flex items-center gap-2 text-xs text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(model[capability.key as keyof AIModel])}
+                        onChange={(e) => updateModelField(model.id, capability.key, e.target.checked)}
+                      />
+                      {capability.label}
+                    </label>
+                  ))}
                 </div>
 
                 <Button onClick={() => saveModel(model)} size="sm" variant="outline" className="rounded-xl gap-2">

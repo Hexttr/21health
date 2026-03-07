@@ -1,10 +1,13 @@
 import { db } from '../db/index.js';
-import { userBalances, balanceTransactions, aiUsageLog, aiModels, platformSettings } from '../db/schema.js';
+import { userBalances, balanceTransactions, aiUsageLog } from '../db/schema.js';
 import { eq, and, sql, gte } from 'drizzle-orm';
+import { getAllowedPlatformSetting } from './platform-settings.js';
 
 export async function getSetting(key: string): Promise<string | null> {
-  const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, key));
-  return row?.value ?? null;
+  if (key === 'markup_percent' || key === 'daily_free_requests' || key === 'min_topup_amount' || key === 'max_topup_amount' || key === 'free_for_admins') {
+    return getAllowedPlatformSetting(key);
+  }
+  return null;
 }
 
 export async function getMarkupPercent(): Promise<number> {

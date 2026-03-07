@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Быстрое обновление: git pull + build + pm2 restart. Не трогает .env."""
+"""Точечное обновление 21day: fast-forward pull + migrate + build + pm2 restart."""
 
 import sys
 try:
@@ -36,23 +36,29 @@ def main():
         sys.exit(1)
 
     try:
-        print("1. Git pull...")
-        run_ssh(client, f"cd {DEPLOY_DIR} && git fetch origin && git checkout {BRANCH} && git reset --hard origin/{BRANCH}")
+        print("1. Проверка nginx-конфига только для 21day...")
+        run_ssh(client, "test -L /etc/nginx/sites-enabled/21day && nginx -t")
 
-        print("2. Frontend build...")
+        print("2. Fast-forward обновление ветки ubuntu...")
+        run_ssh(client, f"cd {DEPLOY_DIR} && git fetch origin && git checkout {BRANCH} && git pull --ff-only origin {BRANCH}")
+
+        print("3. Миграции БД...")
+        run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:migrate")
+
+        print("4. Frontend build...")
         run_ssh(client, f"cd {DEPLOY_DIR} && VITE_API_URL=/api npm run build")
 
-        print("3. Server build...")
+        print("5. Server build...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run build")
 
-        print("4. DB seed-billing (NanoBanana modelKey fix)...")
+        print("6. DB seed-billing...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:seed-billing", check=False)
 
-        print("5. Nginx client_max_body_size (для изображений)...")
-        run_ssh(client, "grep -q 'client_max_body_size' /etc/nginx/sites-available/21day 2>/dev/null || (sed -i '/server_name 21day.club/a\\\n    client_max_body_size 25m;' /etc/nginx/sites-available/21day && nginx -t && systemctl reload nginx)", check=False)
-
-        print("6. PM2 restart...")
+        print("7. PM2 restart only for 21day...")
         run_ssh(client, "pm2 restart 21day")
+
+        print("8. Post-checks...")
+        run_ssh(client, "pm2 show 21day >/dev/null && curl -fsS https://21day.club/api/ai/health >/dev/null")
 
         print("\nГотово. https://21day.club")
     finally:
