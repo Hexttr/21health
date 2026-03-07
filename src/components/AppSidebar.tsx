@@ -5,6 +5,7 @@ import { useChatContext } from "@/contexts/ChatContext";
 import { useProgress } from "@/contexts/ProgressContext";
 import { BalanceWidget } from "@/components/BalanceWidget";
 import { aiTools, getAIToolBadge, type AIToolConfig } from "@/lib/ai-tools";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -50,24 +51,41 @@ export function AppSidebar() {
   const freeToolItems = aiTools.filter((item) => item.access === 'free');
   const paidToolItems = aiTools.filter((item) => item.access === 'paid');
 
-  const renderToolIcon = (item: AIToolConfig) => {
+  const getMenuButtonClass = (isActive: boolean) => cn(
+    "h-10 rounded-xl border px-2.5 transition-all duration-200",
+    isActive
+      ? "border-primary/15 bg-background/92 text-foreground shadow-xs"
+      : "border-transparent text-foreground/90 hover:border-border/70 hover:bg-background/72 hover:text-foreground"
+  );
+
+  const renderToolIcon = (item: AIToolConfig, isActive: boolean) => {
     if (item.icon) {
       return (
-        <span className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center flex-shrink-0 overflow-hidden bg-secondary/50">
+        <span className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border transition-colors",
+          isActive
+            ? "border-primary/15 bg-primary/10"
+            : "border-border/40 bg-background/80"
+        )}>
           <img src={item.icon} alt="" className="w-full h-full object-contain" />
         </span>
       );
     }
 
     return (
-      <span className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center flex-shrink-0 overflow-hidden bg-secondary/50 text-[13px]">
+      <span className={cn(
+        "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border text-[13px] transition-colors",
+        isActive
+          ? "border-primary/15 bg-primary/10"
+          : "border-border/40 bg-background/80"
+      )}>
         {item.iconEmoji || '•'}
       </span>
     );
   };
 
   const renderToolMenu = (items: AIToolConfig[]) => (
-    <SidebarMenu>
+    <SidebarMenu className="gap-1.5">
       {items.map((item) => {
         const isActive = location.pathname === item.url;
         const showTrash = !collapsed && isActive && item.hasChat && item.modelPath;
@@ -75,13 +93,13 @@ export function AppSidebar() {
         return (
           <SidebarMenuItem key={item.title}>
             <div className="flex items-center gap-1 w-full group/item">
-              <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className="flex-1">
+              <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className={cn("flex-1", getMenuButtonClass(isActive))}>
                 <NavLink to={item.url} className="flex items-center gap-3">
-                  {renderToolIcon(item)}
+                  {renderToolIcon(item, isActive)}
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="font-medium truncate">{item.title}</span>
                     {!collapsed && (
-                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge(item.access)}`}>
+                      <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] opacity-85 ${getAIToolBadge(item.access)}`}>
                         {item.access === 'free' ? 'free' : 'paid'}
                       </span>
                     )}
@@ -111,7 +129,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-border/50">
       {/* ── Logo + collapse button ── */}
-      <SidebarHeader className="p-4 pb-3">
+      <SidebarHeader className="p-4 pb-4">
         {!collapsed ? (
           <div className="flex items-center gap-2 w-full">
             <button onClick={goHome} className="flex items-center gap-3 group flex-1 min-w-0">
@@ -136,10 +154,10 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="gap-0">
         {/* ── Progress pill (expanded) — скрыт для ai_user ── */}
         {!collapsed && user?.role !== 'ai_user' && (
-          <div className="px-3 pb-2">
+          <div className="px-3 pb-3">
             <button onClick={goHome} className="w-full text-left p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors cursor-pointer" style={{ background: 'hsl(263 52% 50% / 0.07)' }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground">Мой прогресс</span>
@@ -158,16 +176,17 @@ export function AppSidebar() {
 
         {/* ── Balance widget ── */}
         {!collapsed && (
-          <div className="px-3 pb-2">
+          <div className="px-3 pb-3">
             <BalanceWidget />
           </div>
         )}
 
         {/* ── AI Tools ── */}
-        <SidebarGroup className={!collapsed ? "px-3 pt-2 pb-2" : undefined}>
-          <SidebarGroupLabel className="h-auto px-0 pb-3 pt-0">
+        <SidebarGroup className={!collapsed ? "px-3 pb-3 pt-0" : undefined}>
+          <div className="rounded-[26px] border border-primary/15 bg-primary/5 px-2.5 py-2.5 shadow-xs">
+          <SidebarGroupLabel className="h-auto px-0 pb-2 pt-0">
             {!collapsed ? (
-              <div className="flex w-full items-center gap-3 rounded-xl border border-primary/15 bg-primary/8 px-3 py-3" style={{ background: 'hsl(263 52% 50% / 0.07)' }}>
+              <div className="flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-background/70 px-3 py-3" style={{ background: 'hsl(263 52% 50% / 0.06)' }}>
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
                   <Sparkles className="h-4 w-4 text-primary" />
                 </div>
@@ -187,25 +206,33 @@ export function AppSidebar() {
             {!collapsed && paidToolItems.length > 0 && renderToolMenu(paidToolItems)}
             {collapsed && renderToolMenu([...freeToolItems, ...paidToolItems])}
           </SidebarGroupContent>
+          </div>
         </SidebarGroup>
 
         {/* ── Admin ── */}
         {isAdmin && (
           <>
-            <SidebarSeparator className="my-2" />
-            <SidebarGroup>
-              <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+            <SidebarSeparator className="mx-3 my-0" />
+            <SidebarGroup className={!collapsed ? "px-3 pb-2 pt-3" : undefined}>
+              <SidebarGroupLabel className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
                 Администрирование
               </SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="gap-1.5">
                   {adminItems.map((item) => {
                     const isActive = location.pathname === item.url;
                     return (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                        <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className={getMenuButtonClass(isActive)}>
                           <NavLink to={item.url} className="flex items-center gap-3">
-                            <item.icon className="h-4.5 w-4.5" style={{ width: '18px', height: '18px' }} />
+                            <span className={cn(
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                              isActive
+                                ? "border-primary/15 bg-primary/10 text-primary"
+                                : "border-border/40 bg-background/80 text-muted-foreground"
+                            )}>
+                              <item.icon className="h-4.5 w-4.5" style={{ width: '18px', height: '18px' }} />
+                            </span>
                             <span className="font-medium">{item.title}</span>
                           </NavLink>
                         </SidebarMenuButton>
@@ -221,10 +248,10 @@ export function AppSidebar() {
 
       {/* ── User footer: card + full-width Выйти ── */}
       {user && (
-        <SidebarFooter className="p-3 space-y-2">
+        <SidebarFooter className="px-3 pb-3 pt-2 space-y-2.5">
           {!collapsed ? (
             <>
-              <div className="flex items-center gap-2.5 px-2 py-2.5 rounded-xl bg-secondary/60 border border-border/50">
+              <div className="flex items-center gap-2.5 rounded-2xl border border-border/60 bg-background/65 px-2.5 py-2.5">
                 <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center flex-shrink-0 shadow-glow">
                   <span className="text-xs font-bold text-white">
                     {(user.name?.charAt(0) || user.email?.charAt(0) || '?').toUpperCase()}
@@ -243,7 +270,7 @@ export function AppSidebar() {
                   setOpenMobile(false);
                   navigate('/', { replace: true });
                 }}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive font-medium text-sm hover:bg-destructive hover:text-white transition-colors"
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-destructive/25 bg-background/55 px-3 py-2.5 text-sm font-medium text-destructive/85 transition-colors hover:bg-destructive/8 hover:text-destructive"
               >
                 <LogOut className="w-4 h-4" />
                 Выйти
