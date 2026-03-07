@@ -16,6 +16,7 @@ import { AppFooter } from "@/components/AppFooter";
 
 const Index = React.lazy(() => import("./pages/Index"));
 const ChatGPT = React.lazy(() => import("./pages/ChatGPT"));
+const Claude = React.lazy(() => import("./pages/Claude"));
 const Gemini = React.lazy(() => import("./pages/Gemini"));
 const Groq = React.lazy(() => import("./pages/Groq"));
 const EdgeTTS = React.lazy(() => import("./pages/EdgeTTS"));
@@ -124,6 +125,14 @@ const App = () => (
                     element={
                       <AppLayout>
                         <Gemini />
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/claude"
+                    element={
+                      <AppLayout>
+                        <Claude />
                       </AppLayout>
                     }
                   />

@@ -43,6 +43,14 @@ async function seedBilling() {
 
   const geminiProvider = await ensureProvider('gemini', 'Google Gemini', 'GEMINI_API_KEY');
   const groqProvider = await ensureProvider('groq', 'Groq', 'GROQ_API_KEY');
+  const openaiProvider = await ensureProvider('openai', 'OpenAI', 'OPENAI_API_KEY');
+  const anthropicProvider = await ensureProvider('anthropic', 'Anthropic', 'ANTHROPIC_API_KEY');
+  const providerIds = {
+    gemini: geminiProvider.id,
+    groq: groqProvider.id,
+    openai: openaiProvider.id,
+    anthropic: anthropicProvider.id,
+  } as const;
 
   // Seed models (prices in RUB, approximate based on Google pricing * markup)
   const existingModels = await db.select().from(aiModels);
@@ -198,6 +206,111 @@ async function seedBilling() {
       isActive: true,
       providerName: 'groq',
     },
+    {
+      modelKey: 'gpt-5-mini',
+      displayName: 'GPT-5 Mini',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.010',
+      outputPricePer1k: '0.040',
+      fixedPrice: '0',
+      sortOrder: 30,
+      isActive: true,
+      providerName: 'openai',
+    },
+    {
+      modelKey: 'gpt-5.4',
+      displayName: 'GPT-5.4',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.050',
+      outputPricePer1k: '0.200',
+      fixedPrice: '0',
+      sortOrder: 31,
+      isActive: true,
+      providerName: 'openai',
+    },
+    {
+      modelKey: 'gpt-5.2-thinking',
+      displayName: 'GPT-5.2 Thinking',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.030',
+      outputPricePer1k: '0.120',
+      fixedPrice: '0',
+      sortOrder: 32,
+      isActive: true,
+      providerName: 'openai',
+    },
+    {
+      modelKey: 'gpt-4.1-mini',
+      displayName: 'GPT-4.1 Mini',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.006',
+      outputPricePer1k: '0.024',
+      fixedPrice: '0',
+      sortOrder: 33,
+      isActive: true,
+      providerName: 'openai',
+    },
+    {
+      modelKey: 'claude-sonnet-4-6',
+      displayName: 'Claude Sonnet 4.6',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.030',
+      outputPricePer1k: '0.150',
+      fixedPrice: '0',
+      sortOrder: 40,
+      isActive: true,
+      providerName: 'anthropic',
+    },
+    {
+      modelKey: 'claude-haiku-4-5-20251001',
+      displayName: 'Claude Haiku 4.5',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.010',
+      outputPricePer1k: '0.050',
+      fixedPrice: '0',
+      sortOrder: 41,
+      isActive: true,
+      providerName: 'anthropic',
+    },
+    {
+      modelKey: 'claude-opus-4-6',
+      displayName: 'Claude Opus 4.6',
+      modelType: 'text' as const,
+      supportsStreaming: true,
+      supportsImageInput: true,
+      supportsImageOutput: false,
+      supportsSystemPrompt: true,
+      inputPricePer1k: '0.050',
+      outputPricePer1k: '0.250',
+      fixedPrice: '0',
+      sortOrder: 42,
+      isActive: true,
+      providerName: 'anthropic',
+    },
     // Image models (Gemini Image first = default, NanoBanana stays available)
     {
       modelKey: 'gemini-2.5-flash-image',
@@ -256,7 +369,7 @@ async function seedBilling() {
     const exists = existingModels.find(m =>
       m.modelKey === seed.modelKey || (seed.modelKey === 'gemini-3-pro-image-preview' && m.modelKey === 'nano-banana-pro-preview')
     );
-    const providerId = providerName === 'groq' ? groqProvider.id : geminiProvider.id;
+    const providerId = providerIds[providerName as keyof typeof providerIds];
     if (!exists) {
       await db.insert(aiModels).values({
         providerId,

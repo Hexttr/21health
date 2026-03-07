@@ -36,6 +36,7 @@ const getModelPath = (modelName: string) => modelName.toLowerCase();
 const getModelIconPath = (modelName: string) => {
   const name = modelName.toLowerCase();
   if (name.includes('chatgpt')) return '/icons/chatgpt.png';
+  if (name.includes('claude')) return '/icons/claude.png';
   if (name.includes('gemini')) return '/icons/gemini.png';
   return null;
 };

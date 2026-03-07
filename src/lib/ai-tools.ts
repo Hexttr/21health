@@ -32,6 +32,16 @@ export const aiTools: AIToolConfig[] = [
     icon: '/icons/chatgpt.png',
     hasChat: true,
     modelPath: 'chatgpt',
+    providerName: 'openai',
+  },
+  {
+    title: 'Claude',
+    url: '/claude',
+    access: 'paid',
+    icon: '/icons/claude.png',
+    hasChat: true,
+    modelPath: 'claude',
+    providerName: 'anthropic',
   },
   {
     title: 'Gemini',
