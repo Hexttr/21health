@@ -188,7 +188,7 @@ export function ChatAttachmentPanel({
   return (
     <div
       className={`flex-shrink-0 rounded-[24px] border p-4 transition-colors ${
-        isDragOver ? 'border-primary bg-primary/5' : 'border-border/60 bg-background/95'
+        isDragOver ? 'border-primary bg-primary/5' : 'border-border/60 bg-background/90'
       } ${className || ''}`}
       onDragOver={(event) => {
         event.preventDefault();
@@ -224,12 +224,13 @@ export function ChatAttachmentPanel({
       />
 
       {hasAnyAttachments && (
-        <div className="mb-3 space-y-3 rounded-2xl border border-border/50 bg-secondary/25 p-3">
+        <div className="ai-soft-panel mb-3 space-y-3 p-3">
+          <div className="ai-kicker">Вложения к запросу</div>
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {images.map((url, index) => (
-                <div key={`${url}-${index}`} className="relative">
-                  <img src={url} alt="" className="w-14 h-14 rounded-lg object-cover border border-border/50" />
+                <div key={`${url}-${index}`} className="relative rounded-2xl border border-border/50 bg-background/90 p-1 shadow-xs">
+                  <img src={url} alt="" className="w-14 h-14 rounded-xl object-cover" />
                   <button
                     type="button"
                     onClick={() => removeImage(index)}
@@ -247,7 +248,7 @@ export function ChatAttachmentPanel({
               {attachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="inline-flex max-w-full items-start gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left shadow-sm"
+                  className="ai-context-chip max-w-full"
                 >
                   <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div className="min-w-0">
@@ -272,7 +273,7 @@ export function ChatAttachmentPanel({
               {uploadingDocuments.map((name) => (
                 <div
                   key={name}
-                  className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left shadow-sm"
+                  className="ai-context-chip max-w-full items-center"
                 >
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
                   <div className="min-w-0">

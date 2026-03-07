@@ -50,6 +50,17 @@ const getModelIconPath = (modelName: string) => {
   return null;
 };
 
+function getAttachmentMeta(attachment: ChatAttachment, includeSize = false): string {
+  const parts: string[] = [];
+  if (includeSize) {
+    parts.push(`${Math.max(1, Math.round(attachment.fileSize / 1024))} KB`);
+  }
+  if (attachment.pageCount) parts.push(`${attachment.pageCount} стр.`);
+  if (attachment.sheetCount) parts.push(`${attachment.sheetCount} лист.`);
+  if (attachment.slideCount) parts.push(`${attachment.slideCount} слайд.`);
+  return parts.join(' · ');
+}
+
 function deserializeMessages(stored: ChatMessageRecord[]): Message[] {
   return stored.map((message) => (
     message.role === 'user'
@@ -385,8 +396,8 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
   };
 
   return (
-    <div className="flex h-full min-h-0 bg-[linear-gradient(180deg,#f1ecfb_0%,#f5f1fd_100%)]">
-      <aside className="hidden xl:flex xl:w-80 xl:flex-col xl:border-r xl:border-border/40 xl:bg-card/55 xl:backdrop-blur-xl">
+    <div className="gradient-surface mesh-bg flex h-full min-h-0">
+      <aside className="glass-card hidden xl:flex xl:w-80 xl:flex-col xl:border-r xl:border-border/40">
         <AIConversationList
           title={modelName}
           conversations={conversations}
@@ -398,8 +409,8 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-border/40 bg-background/75 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4">
+        <header className="sticky top-0 z-20 border-b border-border/40 bg-background/72 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="xl:hidden text-muted-foreground hover:text-foreground transition-colors" />
               <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
@@ -463,7 +474,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex min-h-full max-w-5xl flex-col px-4 py-6">
+          <div className="mx-auto flex min-h-full max-w-6xl flex-col px-4 py-7">
             {messages.length === 0 ? (
               <div className="flex min-h-[58vh] flex-col items-center justify-center text-center animate-fade-in-up">
                 <div className="mb-6 flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-border/50 bg-card shadow-large">
@@ -512,7 +523,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                         setInput(suggestion);
                         inputRef.current?.focus();
                       }}
-                      className="rounded-2xl border border-border/60 bg-background/90 px-4 py-4 text-left text-sm font-medium text-foreground shadow-soft transition-all duration-200 hover:border-primary/30 hover:bg-background hover:shadow-md"
+                      className="ai-shell-surface card-hover rounded-2xl px-4 py-4 text-left text-sm font-medium text-foreground transition-all duration-200 hover:border-primary/30 hover:bg-background"
                     >
                       <span className="mr-2 text-primary">→</span>
                       {suggestion}
@@ -521,14 +532,116 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-8 md:space-y-10">
                 {messages.map((message, index) => (
                   <div
                     key={index}
-                    className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
                   >
                     {message.role === 'assistant' && (
-                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
+                      <div className="flex w-full max-w-4xl gap-4">
+                        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
+                          {getModelIconPath(modelName) ? (
+                            <img src={getModelIconPath(modelName)!} alt="" className="h-5 w-5 object-contain" />
+                          ) : (
+                            <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${modelColor}`}>
+                              <Bot className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                        </div>
+
+                        <article className="ai-reading-surface min-w-0 flex-1 px-5 py-5 md:px-7 md:py-6">
+                          <div className="mb-4 flex items-center gap-3 border-b border-border/40 pb-3">
+                            <div className="ai-kicker">Ответ {modelName}</div>
+                            <div className="h-1 w-1 rounded-full bg-muted-foreground/35" />
+                            <div className="text-xs text-muted-foreground">Структурированный разбор</div>
+                          </div>
+
+                          {((message.contextAttachments && message.contextAttachments.length > 0) || (message.contextImages && message.contextImages.length > 0)) && (
+                            <div className="mb-5 space-y-3 border-b border-border/35 pb-5">
+                              <div className="ai-kicker">Контекст запроса</div>
+
+                              {message.contextAttachments && message.contextAttachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {message.contextAttachments.map((attachment) => (
+                                    <div key={attachment.id} className="ai-context-chip max-w-full">
+                                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                                      <div className="min-w-0">
+                                        <div className="truncate text-xs font-medium text-foreground">{attachment.originalName}</div>
+                                        <div className="text-[11px] leading-5 text-muted-foreground">
+                                          {getAttachmentMeta(attachment)}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {message.contextImages && message.contextImages.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {message.contextImages.slice(0, 6).map((url, imageIndex) => (
+                                    <div key={`${url}-${imageIndex}`} className="rounded-2xl border border-border/50 bg-background/90 p-1 shadow-xs">
+                                      <img src={url} alt="" className="h-14 w-14 rounded-xl object-cover" />
+                                    </div>
+                                  ))}
+                                  {message.contextImages.length > 6 && (
+                                    <div className="inline-flex items-center rounded-xl border border-border/50 bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow-xs">
+                                      +{message.contextImages.length - 6} изображ.
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <AIResponseContent content={message.content} />
+                        </article>
+                      </div>
+                    )}
+
+                    {message.role === 'user' && (
+                      <div className="ml-auto flex max-w-[min(40rem,88%)] items-end gap-3">
+                        <div className="rounded-[28px] border border-white/20 gradient-hero px-4 py-3.5 text-primary-foreground shadow-soft">
+                          <div className="space-y-3">
+                            {message.sourceAttachments && message.sourceAttachments.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {message.sourceAttachments.map((attachment) => (
+                                  <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
+                                    <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <div className="min-w-0">
+                                      <div className="truncate text-xs font-medium">{attachment.originalName}</div>
+                                      <div className="text-[11px] opacity-80">
+                                        {getAttachmentMeta(attachment, true)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {message.sourceImages && message.sourceImages.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5">
+                                {message.sourceImages.slice(0, 6).map((url, imageIndex) => (
+                                  <img key={`${url}-${imageIndex}`} src={url} alt="" className="h-12 w-12 rounded-xl border border-white/30 object-cover" />
+                                ))}
+                                {message.sourceImages.length > 6 && <span className="self-center text-xs opacity-80">+{message.sourceImages.length - 6}</span>}
+                              </div>
+                            )}
+                            <p className="whitespace-pre-wrap text-[14px] leading-7">{message.content}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background/90 shadow-soft">
+                          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
+                  <div className="flex justify-start">
+                    <div className="flex w-full max-w-4xl gap-4">
+                      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
                         {getModelIconPath(modelName) ? (
                           <img src={getModelIconPath(modelName)!} alt="" className="h-5 w-5 object-contain" />
                         ) : (
@@ -537,110 +650,13 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                           </div>
                         )}
                       </div>
-                    )}
-
-                    <div
-                      className={`max-w-[88%] rounded-[24px] px-4 py-3 ${
-                        message.role === 'user'
-                          ? 'rounded-br-md bg-gradient-to-br from-violet-600 to-fuchsia-500 text-primary-foreground shadow-glow'
-                          : 'rounded-bl-md border border-white/60 bg-background/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)]'
-                      }`}
-                    >
-                      {message.role === 'assistant' ? (
-                        <div className="space-y-3">
-                          {message.contextAttachments && message.contextAttachments.length > 0 && (
-                            <div className="rounded-2xl border border-border/50 bg-secondary/35 p-3">
-                              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Анализируемые документы
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {message.contextAttachments.map((attachment) => (
-                                  <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-xl border border-border/50 bg-background px-3 py-2">
-                                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                                    <div className="min-w-0">
-                                      <div className="truncate text-xs font-medium">{attachment.originalName}</div>
-                                      <div className="text-[11px] text-muted-foreground">
-                                        {attachment.pageCount ? `${attachment.pageCount} стр.` : ''}
-                                        {attachment.sheetCount ? `${attachment.sheetCount} лист.` : ''}
-                                        {attachment.slideCount ? `${attachment.slideCount} слайд.` : ''}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {message.contextImages && message.contextImages.length > 0 && (
-                            <div className="rounded-2xl border border-border/50 bg-secondary/35 p-3">
-                              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                                Анализируемые изображения
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {message.contextImages.slice(0, 6).map((url, imageIndex) => (
-                                  <img key={`${url}-${imageIndex}`} src={url} alt="" className="h-14 w-14 rounded-xl border border-border/50 object-cover" />
-                                ))}
-                                {message.contextImages.length > 6 && <span className="self-center text-xs text-muted-foreground">+{message.contextImages.length - 6}</span>}
-                              </div>
-                            </div>
-                          )}
-
-                          <AIResponseContent content={message.content} />
+                      <div className="ai-reading-surface max-w-xl px-6 py-5">
+                        <div className="mb-3 ai-kicker">Ответ {modelName}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {message.sourceAttachments && message.sourceAttachments.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {message.sourceAttachments.map((attachment) => (
-                                <div key={attachment.id} className="inline-flex max-w-full items-start gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
-                                  <FileText className="mt-0.5 h-4 w-4 shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="truncate text-xs font-medium">{attachment.originalName}</div>
-                                    <div className="text-[11px] opacity-80">
-                                      {Math.max(1, Math.round(attachment.fileSize / 1024))} KB
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {message.sourceImages && message.sourceImages.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {message.sourceImages.slice(0, 6).map((url, imageIndex) => (
-                                <img key={`${url}-${imageIndex}`} src={url} alt="" className="h-12 w-12 rounded-xl border border-white/30 object-cover" />
-                              ))}
-                              {message.sourceImages.length > 6 && <span className="self-center text-xs opacity-80">+{message.sourceImages.length - 6}</span>}
-                            </div>
-                          )}
-                          <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {message.role === 'user' && (
-                      <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border/50 bg-background shadow-soft">
-                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-                  <div className="flex justify-start gap-3">
-                    <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-card shadow-soft">
-                      {getModelIconPath(modelName) ? (
-                        <img src={getModelIconPath(modelName)!} alt="" className="h-5 w-5 object-contain" />
-                      ) : (
-                        <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${modelColor}`}>
-                          <Bot className="h-4 w-4 text-white" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="rounded-[24px] rounded-bl-md border border-white/60 bg-background/95 px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
                   </div>
@@ -652,8 +668,8 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
           </div>
         </div>
 
-        <div className="border-t border-border/30 bg-gradient-to-t from-background/95 via-background/92 to-background/80 px-4 py-4 shadow-[0_-18px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-          <div className="mx-auto max-w-5xl">
+        <div className="border-t border-border/35 bg-background/78 px-4 py-4 backdrop-blur-xl">
+          <div className="mx-auto max-w-6xl">
             {canAttachImages || canAttachDocuments ? (
               <ChatAttachmentPanel
                 images={sourceImages}
@@ -677,7 +693,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                     </p>
                   </div>
                 )}
-                className="border-white/80 bg-background/95 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.1)]"
+                className="glass-card rounded-[30px] p-4 shadow-soft"
               >
                 {({ openFilePicker, isUploadingDocuments }) => (
                   <div className="flex items-end gap-3">
@@ -685,13 +701,13 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                       onClick={openFilePicker}
                       variant="outline"
                       size="icon"
-                      className="h-[50px] w-[50px] shrink-0 rounded-2xl border-border/60 bg-background hover:border-primary/40 hover:bg-primary/5"
+                      className="h-[50px] w-[50px] shrink-0 rounded-2xl border-border/60 bg-background/90 hover:border-primary/40 hover:bg-primary/5"
                       disabled={isLoading || isUploadingDocuments}
                       title="Прикрепить файл"
                     >
                       <Upload className="h-[18px] w-[18px]" />
                     </Button>
-                    <div className="relative flex-1">
+                    <div className="chat-input-wrap relative flex-1">
                       <textarea
                         ref={inputRef}
                         value={input}
@@ -699,7 +715,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                         onKeyDown={handleKeyDown}
                         placeholder={activeConversation ? 'Продолжить диалог...' : `Написать ${modelName}...`}
                         rows={1}
-                        className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
+                        className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-background/80 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
                         disabled={isLoading || isUploadingDocuments}
                         autoComplete="off"
                         style={{ height: '50px' }}
@@ -709,7 +725,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                       onClick={sendMessage}
                       disabled={!input.trim() || isLoading || isUploadingDocuments}
                       size="icon"
-                      className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-glow transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
+                      className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-soft transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
                     >
                       {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                     </Button>
@@ -717,9 +733,9 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                 )}
               </ChatAttachmentPanel>
             ) : (
-              <div className="rounded-[28px] border border-white/80 bg-background/95 p-4 shadow-[0_12px_40px_rgba(15,23,42,0.1)]">
+              <div className="glass-card rounded-[30px] p-4 shadow-soft">
                 <div className="flex items-end gap-3">
-                  <div className="relative flex-1">
+                  <div className="chat-input-wrap relative flex-1">
                     <textarea
                       ref={inputRef}
                       value={input}
@@ -727,7 +743,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                       onKeyDown={handleKeyDown}
                       placeholder={activeConversation ? 'Продолжить диалог...' : `Написать ${modelName}...`}
                       rows={1}
-                      className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-secondary/20 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
+                      className="min-h-[50px] max-h-40 w-full resize-none rounded-[22px] border border-border/60 bg-background/80 px-4 py-3.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:ring-4 focus:ring-primary/10"
                       disabled={isLoading}
                       autoComplete="off"
                       style={{ height: '50px' }}
@@ -737,7 +753,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
                     onClick={sendMessage}
                     disabled={!input.trim() || isLoading}
                     size="icon"
-                    className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-glow transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
+                    className="h-[50px] w-[50px] min-w-[50px] shrink-0 rounded-2xl gradient-hero shadow-soft transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
                   >
                     {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                   </Button>

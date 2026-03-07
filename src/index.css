@@ -246,6 +246,29 @@
   .animate-pulse-soft {
     animation: pulseSoft 3s ease-in-out infinite;
   }
+
+  .ai-shell-surface {
+    @apply border border-border/50 bg-background/80 backdrop-blur-xl;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .ai-reading-surface {
+    @apply rounded-[30px] border border-border/50 bg-card/90;
+    box-shadow: var(--shadow-md);
+  }
+
+  .ai-soft-panel {
+    @apply rounded-2xl border border-border/50 bg-secondary/20;
+  }
+
+  .ai-context-chip {
+    @apply inline-flex items-start gap-2 rounded-xl border border-border/50 bg-background/90 px-3 py-2 text-left;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .ai-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70;
+  }
 }
 
 @layer utilities {

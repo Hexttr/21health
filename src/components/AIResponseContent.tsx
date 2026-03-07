@@ -7,13 +7,18 @@ type AIResponseContentProps = {
 
 function looksLikeHeading(line: string, nextLine?: string): boolean {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.length > 72) return false;
+  const normalized = trimmed.replace(/:$/, '');
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (!trimmed || normalized.length > 48) return false;
+  if (words.length < 1 || words.length > 7) return false;
   if (/^#{1,6}\s/.test(trimmed)) return false;
   if (/^[-*•]\s/.test(trimmed)) return false;
   if (/^\d+\.\s/.test(trimmed)) return false;
-  if (/[.!?;:]$/.test(trimmed)) return false;
+  if (/[.!?;]$/.test(trimmed)) return false;
+  if (!/^[A-ZА-ЯЁ0-9]/.test(normalized)) return false;
+  if (/[|]{2,}/.test(normalized)) return false;
   if (!nextLine || !nextLine.trim()) return false;
-  return true;
+  return words.some((word) => word.length > 3);
 }
 
 function preprocessAIContent(raw: string): string {
@@ -58,6 +63,11 @@ function preprocessAIContent(raw: string): string {
       continue;
     }
 
+    if (/^[-_*=]{3,}$/.test(line)) {
+      output.push('---');
+      continue;
+    }
+
     output.push(line);
   }
 
@@ -68,17 +78,18 @@ export function AIResponseContent({ content }: AIResponseContentProps) {
   const prepared = preprocessAIContent(content);
 
   return (
-    <div className="prose prose-sm max-w-none text-[14px] leading-7 text-foreground prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-foreground prose-headings:mb-3 prose-headings:mt-6 prose-headings:font-serif prose-headings:text-[15px] prose-headings:font-semibold prose-h3:border-l-2 prose-h3:border-primary/30 prose-h3:pl-3 prose-code:rounded prose-code:bg-secondary/70 prose-code:px-1.5 prose-code:py-0.5 prose-pre:rounded-2xl prose-pre:border prose-pre:border-border/50 prose-pre:bg-secondary/70 prose-blockquote:border-primary/30 prose-blockquote:bg-primary/5 prose-blockquote:px-4 prose-blockquote:py-2 prose-blockquote:text-foreground">
+    <div className="prose max-w-none text-[15px] leading-[1.9] text-foreground/95 prose-p:my-4 prose-ul:my-4 prose-ol:my-4 prose-li:my-1.5 prose-strong:font-semibold prose-strong:text-foreground prose-headings:mt-8 prose-headings:mb-4 prose-headings:font-serif prose-headings:font-semibold prose-headings:tracking-[-0.02em] prose-h1:text-[2rem] prose-h2:text-[1.65rem] prose-h3:text-[1.28rem] prose-h4:text-[1.08rem] prose-hr:my-7 prose-hr:border-border/60 prose-code:rounded-md prose-code:bg-secondary/60 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-[0.92em] prose-pre:my-5 prose-pre:rounded-3xl prose-pre:border prose-pre:border-border/50 prose-pre:bg-secondary/55 prose-pre:px-5 prose-pre:py-4 prose-pre:text-[13px] prose-blockquote:my-5 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-2 prose-blockquote:border-primary/25 prose-blockquote:bg-primary/5 prose-blockquote:px-5 prose-blockquote:py-3 prose-blockquote:text-foreground prose-table:my-5 prose-thead:border-b prose-thead:border-border/50">
       <ReactMarkdown
         components={{
           a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4" />,
           table: ({ node: _node, ...props }) => (
-            <div className="overflow-x-auto rounded-xl border border-border/50 bg-background/80">
-              <table {...props} className="min-w-full border-collapse text-sm" />
+            <div className="overflow-x-auto rounded-2xl border border-border/50 bg-background/85">
+              <table {...props} className="min-w-full border-collapse text-[14px]" />
             </div>
           ),
-          th: ({ node: _node, ...props }) => <th {...props} className="border-b border-border/50 bg-secondary/40 px-3 py-2 text-left font-medium" />,
-          td: ({ node: _node, ...props }) => <td {...props} className="border-b border-border/30 px-3 py-2 align-top" />,
+          hr: ({ node: _node, ...props }) => <hr {...props} className="border-0 border-t border-border/60" />,
+          th: ({ node: _node, ...props }) => <th {...props} className="border-b border-border/50 bg-secondary/35 px-4 py-3 text-left text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground" />,
+          td: ({ node: _node, ...props }) => <td {...props} className="border-b border-border/30 px-4 py-3 align-top leading-6" />,
         }}
       >
         {prepared}
