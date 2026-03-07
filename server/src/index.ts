@@ -24,6 +24,7 @@ import { eq } from 'drizzle-orm';
 import { getAuthFromRequest } from './lib/auth.js';
 
 const UPLOADS_DIR = join(__dirname, '..', 'uploads');
+const BLOCKED_PROBE_PATH = /(^\/\.)|(\.(env|sql|ini|log|bak|zip|ya?ml|toml|lock|config|conf|php|asp|aspx|cgi)$)|(^\/(?:wp-admin|wp-login\.php|vendor|\.git|cgi-bin|phpmyadmin|adminer|server-status))/i;
 
 const app = Fastify({ logger: true, bodyLimit: 20 * 1024 * 1024 }); // 20MB for image generation
 
@@ -181,6 +182,9 @@ async function main() {
     app.get('*', async (req, reply) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') return;
       const p = (req.url || '/').split('?')[0];
+      if (BLOCKED_PROBE_PATH.test(p)) {
+        return reply.code(404).type('text/plain').send('Not found');
+      }
       const filePath = p === '/' ? 'index.html' : p.slice(1).replace(/\.\./g, '');
       const full = resolvePath(distPath, filePath);
       if (full.startsWith(resolvePath(distPath)) && existsSync(full)) {
@@ -190,6 +194,9 @@ async function main() {
         } catch {
           /* ignore */
         }
+      }
+      if (/\.[a-z0-9]+$/i.test(filePath)) {
+        return reply.code(404).type('text/plain').send('Not found');
       }
       return reply.sendFile('index.html', distPath);
     });

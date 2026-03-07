@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { getAIToolBadge } from '@/lib/ai-tools';
 
 const RATES = [
   { id: '0.9', label: 'Медленнее' },
@@ -134,7 +135,12 @@ export default function EdgeTTS() {
               </div>
               <div>
                 <h1 className="font-serif text-lg font-semibold text-foreground leading-none">Озвучка в браузере</h1>
-                <p className="text-xs text-muted-foreground mt-0.5">Web Speech API без сервера</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-muted-foreground">Web Speech API без сервера</p>
+                  <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge('free')}`}>
+                    free
+                  </span>
+                </div>
               </div>
             </div>
             <BalanceWidget compact />
@@ -148,6 +154,11 @@ export default function EdgeTTS() {
                 <Mic className="w-10 h-10 text-primary" />
               </div>
               <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">Озвучьте текст бесплатно</h2>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getAIToolBadge('free')}`}>
+                  Бесплатно
+                </span>
+              </div>
               <p className="text-muted-foreground max-w-md leading-relaxed">
                 Озвучка идёт прямо в вашем браузере через Web Speech API. Голоса и качество зависят от браузера и операционной системы.
               </p>

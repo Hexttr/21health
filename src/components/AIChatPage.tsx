@@ -9,6 +9,7 @@ import { AIModel, ModelSelector } from '@/components/ModelSelector';
 import { useBalance } from '@/contexts/BalanceContext';
 import { BalanceWidget } from '@/components/BalanceWidget';
 import { ImageUploadPanel } from '@/components/ImageUploadPanel';
+import { getAIToolBadge, getAIToolByProvider, getAIToolByTitle } from '@/lib/ai-tools';
 
 type Message = {
   role: 'user';
@@ -17,6 +18,7 @@ type Message = {
 } | {
   role: 'assistant';
   content: string;
+  contextImages?: string[];
 };
 
 interface AIChatPageProps {
@@ -24,6 +26,7 @@ interface AIChatPageProps {
   modelIcon: string;
   modelColor: string;
   providerName?: string;
+  starterPrompts?: string[];
 }
 
 const getChatStorageKey = (modelName: string) => `ai-chat-${modelName.toLowerCase()}`;
@@ -37,7 +40,7 @@ const getModelIconPath = (modelName: string) => {
   return null;
 };
 
-export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: AIChatPageProps) {
+export function AIChatPage({ modelName, modelIcon, modelColor, providerName, starterPrompts }: AIChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +52,12 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: A
   const chatContext = useChatContext();
   const { refreshBalance } = useBalance();
   const canAttachImages = Boolean(selectedModel?.supportsImageInput);
+  const toolConfig = getAIToolByProvider(providerName) || getAIToolByTitle(modelName);
+  const initialPrompts = starterPrompts || [
+    'Как использовать ИИ в моей работе?',
+    'Объясни мне промпт-инжиниринг',
+    'Помоги написать промпт',
+  ];
 
   useEffect(() => {
     if (!canAttachImages && sourceImages.length > 0) {
@@ -149,7 +158,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: A
       const decoder = new TextDecoder();
       let textBuffer = '';
 
-      setMessages([...newMessages, { role: 'assistant', content: '' }]);
+      setMessages([...newMessages, { role: 'assistant', content: '', contextImages: userMessage.sourceImages }]);
 
       let streamDone = false;
       while (true) {
@@ -234,9 +243,16 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: A
               <h1 className="font-serif text-lg font-semibold text-foreground leading-none">
                 {modelName}
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Чат с искусственным интеллектом
-              </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    Чат с искусственным интеллектом
+                  </p>
+                  {toolConfig && (
+                    <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
+                      {toolConfig.access === 'free' ? 'free' : 'paid'}
+                    </span>
+                  )}
+                </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -273,15 +289,25 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: A
               <h2 className="font-serif text-2xl font-semibold text-foreground mb-3">
                 Начните диалог с {modelName}
               </h2>
+              <div className="flex items-center gap-2 mb-3">
+                {toolConfig && (
+                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${getAIToolBadge(toolConfig.access)}`}>
+                    {toolConfig.access === 'free' ? 'Бесплатно' : 'Платно'}
+                  </span>
+                )}
+                {canAttachImages && (
+                  <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    Multimodal
+                  </span>
+                )}
+              </div>
               <p className="text-muted-foreground max-w-sm leading-relaxed">
-                Задайте любой вопрос, попросите помочь с задачей или обсудите тему урока
+                {canAttachImages
+                  ? 'Задайте вопрос, приложите скрин или фото и попросите модель разобрать, сравнить или объяснить изображение.'
+                  : 'Задайте любой вопрос, попросите помочь с задачей или обсудите тему урока'}
               </p>
               <div className="mt-8 grid gap-3 w-full max-w-sm">
-                {[
-                  'Как использовать ИИ в моей работе?',
-                  'Объясни мне промпт-инжиниринг',
-                  'Помоги написать промпт',
-                ].map((suggestion) => (
+                {initialPrompts.map((suggestion) => (
                   <button
                     key={suggestion}
                     onClick={() => { setInput(suggestion); inputRef.current?.focus(); }}
@@ -319,8 +345,23 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName }: A
                   }`}
                 >
                   {message.role === 'assistant' ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:font-serif prose-headings:text-base prose-pre:text-xs prose-code:text-xs prose-code:bg-secondary/50 prose-code:px-1 prose-code:rounded">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <div className="space-y-2">
+                      {message.contextImages && message.contextImages.length > 0 && (
+                        <div className="rounded-xl border border-border/50 bg-secondary/30 p-2">
+                          <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Анализируемые изображения
+                          </div>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {message.contextImages.slice(0, 6).map((url, imageIndex) => (
+                              <img key={`${url}-${imageIndex}`} src={url} alt="" className="w-12 h-12 rounded object-cover border border-border/50" />
+                            ))}
+                            {message.contextImages.length > 6 && <span className="text-xs self-center">+{message.contextImages.length - 6}</span>}
+                          </div>
+                        </div>
+                      )}
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-[13px] leading-relaxed prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:font-serif prose-headings:text-base prose-pre:text-xs prose-code:text-xs prose-code:bg-secondary/50 prose-code:px-1 prose-code:rounded">
+                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2">

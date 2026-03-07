@@ -4,6 +4,7 @@ import { BalanceWidget } from '@/components/BalanceWidget';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import { useChatContext } from '@/contexts/ChatContext';
+import { getAIToolBadge } from '@/lib/ai-tools';
 
 export default function NanoBanana() {
   const chatContext = useChatContext();
@@ -23,9 +24,14 @@ export default function NanoBanana() {
                 <h1 className="font-serif text-lg font-semibold text-foreground leading-none">
                   NanoBanana 3 Pro
                 </h1>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Генерация изображений с помощью ИИ
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-muted-foreground">
+                    Генерация изображений с помощью ИИ
+                  </p>
+                  <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge('paid')}`}>
+                    paid
+                  </span>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">

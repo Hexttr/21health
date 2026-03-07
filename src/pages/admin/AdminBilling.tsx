@@ -20,6 +20,34 @@ interface AIProvider {
   id: string; name: string; displayName: string; apiKeyEnv: string | null; isActive: boolean;
 }
 
+interface UsageSummary {
+  overview: {
+    totalRequests: number;
+    freeRequests: number;
+    paidRequests: number;
+    totalRevenue: string;
+    activeUsers: number;
+  };
+  requestTypes: Array<{
+    requestType: string;
+    requests: number;
+    revenue: string;
+  }>;
+  providerStats: Array<{
+    providerName: string;
+    requests: number;
+    revenue: string;
+  }>;
+  topModels: Array<{
+    modelName: string;
+    providerName: string;
+    requestType: string;
+    requests: number;
+    revenue: string;
+  }>;
+  windowDays: number;
+}
+
 interface ProviderKeyStatus {
   hasStoredKey: boolean;
   masked: string | null;
@@ -214,8 +242,9 @@ export default function AdminBilling() {
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [settings, setSettings] = useState<Settings>({});
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'settings' | 'models' | 'providers'>('settings');
+  const [tab, setTab] = useState<'settings' | 'models' | 'providers' | 'analytics'>('settings');
 
   useEffect(() => { loadAll(); }, []);
 
@@ -237,9 +266,14 @@ export default function AdminBilling() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProviders(), loadModels(), loadSettings()]);
+      await Promise.all([loadProviders(), loadModels(), loadSettings(), loadAnalytics()]);
     } catch (e) { toast.error('Ошибка загрузки'); }
     finally { setLoading(false); }
+  };
+
+  const loadAnalytics = async () => {
+    const data = await api<UsageSummary>('/admin/usage-summary');
+    setUsageSummary(data);
   };
 
   const saveSettings = async () => {
@@ -315,13 +349,13 @@ export default function AdminBilling() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
-          {(['settings', 'models', 'providers'] as const).map(t => (
+          {(['settings', 'models', 'providers', 'analytics'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${tab === t ? 'bg-primary text-white' : 'bg-card border border-border/50 text-foreground hover:bg-secondary/50'}`}
             >
-              {t === 'settings' ? 'Настройки' : t === 'models' ? 'Модели' : 'Провайдеры'}
+              {t === 'settings' ? 'Настройки' : t === 'models' ? 'Модели' : t === 'providers' ? 'Провайдеры' : 'Аналитика'}
             </button>
           ))}
         </div>
@@ -480,6 +514,74 @@ export default function AdminBilling() {
             {providers.map((p) => (
               <ProviderCard key={p.id} provider={p} modelCount={models.filter(m => m.providerId === p.id).length} onUpdate={loadAll} />
             ))}
+          </div>
+        )}
+
+        {tab === 'analytics' && usageSummary && (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: 'Запросов', value: usageSummary.overview.totalRequests },
+                { label: 'Активных пользователей', value: usageSummary.overview.activeUsers },
+                { label: 'Бесплатных запросов', value: usageSummary.overview.freeRequests },
+                { label: `Выручка за ${usageSummary.windowDays} дней`, value: `${Number(usageSummary.overview.totalRevenue).toFixed(2)} ₽` },
+              ].map((card) => (
+                <div key={card.label} className="bg-card rounded-2xl border border-border/50 shadow-soft p-5">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{card.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-lg font-semibold">По типу запросов</h2>
+                  <Button size="sm" variant="outline" className="rounded-xl" onClick={loadAnalytics}>Обновить</Button>
+                </div>
+                <div className="space-y-3">
+                  {usageSummary.requestTypes.map((row) => (
+                    <div key={row.requestType} className="flex items-center justify-between rounded-xl border border-border/50 bg-secondary/20 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{row.requestType}</p>
+                        <p className="text-xs text-muted-foreground">{row.requests} запросов</p>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
+                <h2 className="font-serif text-lg font-semibold">По провайдерам</h2>
+                <div className="space-y-3">
+                  {usageSummary.providerStats.map((row) => (
+                    <div key={row.providerName} className="flex items-center justify-between rounded-xl border border-border/50 bg-secondary/20 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{row.providerName}</p>
+                        <p className="text-xs text-muted-foreground">{row.requests} запросов</p>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
+              <h2 className="font-serif text-lg font-semibold">Топ инструментов и моделей</h2>
+              <div className="space-y-3">
+                {usageSummary.topModels.map((row, index) => (
+                  <div key={`${row.providerName}-${row.modelName}-${row.requestType}-${index}`} className="flex items-center justify-between rounded-xl border border-border/50 bg-secondary/20 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{row.modelName}</p>
+                      <p className="text-xs text-muted-foreground">{row.providerName} · {row.requestType} · {row.requests} запросов</p>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

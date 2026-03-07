@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useChatContext } from "@/contexts/ChatContext";
 import { useProgress } from "@/contexts/ProgressContext";
 import { BalanceWidget } from "@/components/BalanceWidget";
-import { aiTools, type AIToolConfig } from "@/lib/ai-tools";
+import { aiTools, getAIToolBadge, type AIToolConfig } from "@/lib/ai-tools";
 import {
   Sidebar,
   SidebarContent,
@@ -78,7 +78,14 @@ export function AppSidebar() {
               <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className="flex-1">
                 <NavLink to={item.url} className="flex items-center gap-3">
                   {renderToolIcon(item)}
-                  <span className="font-medium">{item.title}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="font-medium truncate">{item.title}</span>
+                    {!collapsed && (
+                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${getAIToolBadge(item.access)}`}>
+                        {item.access === 'free' ? 'free' : 'paid'}
+                      </span>
+                    )}
+                  </div>
                 </NavLink>
               </SidebarMenuButton>
               {showTrash && (

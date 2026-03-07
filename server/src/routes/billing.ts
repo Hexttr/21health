@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { payments, balanceTransactions, aiUsageLog, userBalances } from '../db/schema.js';
+import { payments, balanceTransactions, aiUsageLog, userBalances, aiModels, aiProviders } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
 import { getBalance, ensureBalanceRow, creditBalance, getSetting } from '../lib/billing.js';
 import { generatePaymentUrl, verifyResultSignature, verifySuccessSignature } from '../lib/robokassa.js';
@@ -170,6 +170,72 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
     const rows = await db.select().from(aiUsageLog).orderBy(desc(aiUsageLog.createdAt)).limit(200);
     return reply.send(rows);
+  });
+
+  app.get('/admin/usage-summary', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [overview] = await db
+      .select({
+        totalRequests: sql<number>`count(*)::int`,
+        freeRequests: sql<number>`count(*) filter (where ${aiUsageLog.isFree} = true)::int`,
+        paidRequests: sql<number>`count(*) filter (where ${aiUsageLog.isFree} = false)::int`,
+        totalRevenue: sql<string>`coalesce(sum(${aiUsageLog.finalCost}::numeric), 0)::text`,
+        activeUsers: sql<number>`count(distinct ${aiUsageLog.userId})::int`,
+      })
+      .from(aiUsageLog)
+      .where(sql`${aiUsageLog.createdAt} >= ${sevenDaysAgo}`);
+
+    const requestTypes = await db
+      .select({
+        requestType: aiUsageLog.requestType,
+        requests: sql<number>`count(*)::int`,
+        revenue: sql<string>`coalesce(sum(${aiUsageLog.finalCost}::numeric), 0)::text`,
+      })
+      .from(aiUsageLog)
+      .where(sql`${aiUsageLog.createdAt} >= ${sevenDaysAgo}`)
+      .groupBy(aiUsageLog.requestType)
+      .orderBy(desc(sql<number>`count(*)::int`));
+
+    const providerStats = await db
+      .select({
+        providerName: sql<string>`coalesce(${aiProviders.displayName}, 'Без провайдера')`,
+        requests: sql<number>`count(*)::int`,
+        revenue: sql<string>`coalesce(sum(${aiUsageLog.finalCost}::numeric), 0)::text`,
+      })
+      .from(aiUsageLog)
+      .leftJoin(aiModels, eq(aiUsageLog.modelId, aiModels.id))
+      .leftJoin(aiProviders, eq(aiModels.providerId, aiProviders.id))
+      .where(sql`${aiUsageLog.createdAt} >= ${sevenDaysAgo}`)
+      .groupBy(sql`coalesce(${aiProviders.displayName}, 'Без провайдера')`)
+      .orderBy(desc(sql<number>`count(*)::int`));
+
+    const topModels = await db
+      .select({
+        modelName: sql<string>`coalesce(${aiModels.displayName}, 'Browser tool')`,
+        providerName: sql<string>`coalesce(${aiProviders.displayName}, 'Локальный браузер')`,
+        requestType: aiUsageLog.requestType,
+        requests: sql<number>`count(*)::int`,
+        revenue: sql<string>`coalesce(sum(${aiUsageLog.finalCost}::numeric), 0)::text`,
+      })
+      .from(aiUsageLog)
+      .leftJoin(aiModels, eq(aiUsageLog.modelId, aiModels.id))
+      .leftJoin(aiProviders, eq(aiModels.providerId, aiProviders.id))
+      .where(sql`${aiUsageLog.createdAt} >= ${sevenDaysAgo}`)
+      .groupBy(aiUsageLog.requestType, sql`coalesce(${aiModels.displayName}, 'Browser tool')`, sql`coalesce(${aiProviders.displayName}, 'Локальный браузер')`)
+      .orderBy(desc(sql<number>`count(*)::int`))
+      .limit(8);
+
+    return reply.send({
+      overview,
+      requestTypes,
+      providerStats,
+      topModels,
+      windowDays: 7,
+    });
   });
 
   // Admin: list all balances
