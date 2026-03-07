@@ -4,6 +4,8 @@ import { db } from '../db/index.js';
 import { aiProviders, aiModels, platformSettings } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
 
+const PROVIDER_API_KEY_PREFIX = 'provider_apikey_';
+
 export async function aiModelsRoutes(app: FastifyInstance) {
   // Public: list active models (for model selector)
   app.get('/ai-models', async (req, reply) => {
@@ -53,12 +55,22 @@ export async function aiModelsRoutes(app: FastifyInstance) {
   );
 
   // Admin: update provider
-  app.put<{ Params: { id: string }; Body: { displayName?: string; apiKeyEnv?: string; isActive?: boolean } }>(
+  app.put<{ Params: { id: string }; Body: { displayName?: string; apiKeyEnv?: string; apiKey?: string; isActive?: boolean } }>(
     '/admin/ai-providers/:id',
     async (req, reply) => {
       const payload = getAuthFromRequest(req);
       if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
       const data = req.body || {};
+      if (data.apiKey !== undefined && data.apiKey !== '') {
+        await db.insert(platformSettings).values({
+          key: PROVIDER_API_KEY_PREFIX + req.params.id,
+          value: String(data.apiKey),
+          description: `API key for provider ${req.params.id}`,
+        }).onConflictDoUpdate({
+          target: platformSettings.key,
+          set: { value: String(data.apiKey), updatedAt: new Date() },
+        });
+      }
       const [row] = await db.update(aiProviders).set({
         ...(data.displayName !== undefined && { displayName: data.displayName }),
         ...(data.apiKeyEnv !== undefined && { apiKeyEnv: data.apiKeyEnv }),
@@ -68,6 +80,14 @@ export async function aiModelsRoutes(app: FastifyInstance) {
       return reply.send(row);
     }
   );
+
+  // Admin: get provider API key status (masked)
+  app.get<{ Params: { id: string } }>('/admin/ai-providers/:id/apikey', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+    const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, PROVIDER_API_KEY_PREFIX + req.params.id));
+    return reply.send({ hasKey: !!row?.value, masked: row?.value ? '••••' + String(row.value).slice(-4) : null });
+  });
 
   // Admin: list all models
   app.get('/admin/ai-models', async (req, reply) => {

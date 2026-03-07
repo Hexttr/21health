@@ -27,6 +27,12 @@ interface ModelSelectorProps {
 let cachedData: { models: AIModel[]; providers: AIProvider[] } | null = null;
 let fetchPromise: Promise<{ models: AIModel[]; providers: AIProvider[] }> | null = null;
 
+/** Сбросить кэш (после изменений в админке) */
+export function invalidateModelsCache() {
+  cachedData = null;
+  fetchPromise = null;
+}
+
 function fetchModels(): Promise<{ models: AIModel[]; providers: AIProvider[] }> {
   if (cachedData) return Promise.resolve(cachedData);
   if (fetchPromise) return fetchPromise;

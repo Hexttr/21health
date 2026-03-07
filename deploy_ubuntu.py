@@ -197,6 +197,7 @@ PORT={APP_PORT}
         print("\n--- 7. База данных ---")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:migrate 2>/dev/null || true")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:seed 2>/dev/null || true")
+        run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:seed-billing 2>/dev/null || true")
 
         # --- 8. PM2 ---
         print("\n--- 8. PM2 ---")

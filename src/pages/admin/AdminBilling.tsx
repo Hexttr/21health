@@ -4,9 +4,54 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Settings, Database, Save, Plus, Trash2, Loader2, DollarSign } from 'lucide-react';
+import { invalidateModelsCache } from '@/components/ModelSelector';
 
 interface AIProvider {
   id: string; name: string; displayName: string; apiKeyEnv: string | null; isActive: boolean;
+}
+
+function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider; modelCount: number; onUpdate: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api<{ hasKey: boolean; masked: string | null }>(`/admin/ai-providers/${provider.id}/apikey`)
+      .then((r) => { setHasKey(r.hasKey); if (r.masked) setApiKey(r.masked); })
+      .catch(() => setHasKey(false));
+  }, [provider.id]);
+  const saveApiKey = async () => {
+    const raw = prompt('Введите API-ключ (оставьте пустым, чтобы не менять):');
+    if (raw === null) return;
+    setSaving(true);
+    try {
+      await api(`/admin/ai-providers/${provider.id}`, { method: 'PUT', body: { apiKey: raw || undefined } });
+      setHasKey(!!raw);
+      if (raw) setApiKey('••••' + raw.slice(-4));
+      toast.success(raw ? 'Ключ сохранён' : 'Ключ не изменён');
+      onUpdate();
+    } catch { toast.error('Ошибка сохранения'); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-sm font-semibold">{provider.displayName}</p>
+          <p className="text-xs text-muted-foreground">key: {provider.name} | env: {provider.apiKeyEnv || '—'}</p>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded-full ${provider.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {provider.isActive ? 'Активен' : 'Выключен'}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-xs text-muted-foreground">API-ключ: {hasKey === null ? '…' : hasKey ? apiKey || '••••' : 'не задан'}</span>
+        <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs" onClick={saveApiKey} disabled={saving}>
+          {saving ? '…' : hasKey ? 'Изменить' : 'Добавить'}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">Моделей: {modelCount}</p>
+    </div>
+  );
 }
 interface AIModel {
   id: string; providerId: string; modelKey: string; displayName: string; modelType: string;
@@ -47,6 +92,7 @@ export default function AdminBilling() {
   const saveModel = async (model: AIModel) => {
     try {
       await api(`/admin/ai-models/${model.id}`, { method: 'PUT', body: model });
+      invalidateModelsCache();
       toast.success('Модель обновлена');
     } catch { toast.error('Ошибка сохранения модели'); }
   };
@@ -59,6 +105,7 @@ export default function AdminBilling() {
         modelType: 'text', sortOrder: models.length,
       }});
       setModels([...models, row]);
+      invalidateModelsCache();
       toast.success('Модель добавлена');
     } catch { toast.error('Ошибка'); }
   };
@@ -68,6 +115,7 @@ export default function AdminBilling() {
     try {
       await api(`/admin/ai-models/${id}`, { method: 'DELETE' });
       setModels(models.filter(m => m.id !== id));
+      invalidateModelsCache();
       toast.success('Удалено');
     } catch { toast.error('Ошибка удаления'); }
   };
@@ -256,20 +304,7 @@ export default function AdminBilling() {
               </Button>
             </div>
             {providers.map((p) => (
-              <div key={p.id} className="bg-card rounded-2xl border border-border/50 shadow-soft p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-semibold">{p.displayName}</p>
-                    <p className="text-xs text-muted-foreground">key: {p.name} | env: {p.apiKeyEnv || '—'}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${p.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {p.isActive ? 'Активен' : 'Выключен'}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Моделей: {models.filter(m => m.providerId === p.id).length}
-                </p>
-              </div>
+              <ProviderCard key={p.id} provider={p} modelCount={models.filter(m => m.providerId === p.id).length} onUpdate={loadAll} />
             ))}
           </div>
         )}

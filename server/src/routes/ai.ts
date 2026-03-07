@@ -1,9 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { aiModels, aiProviders } from '../db/schema.js';
+import { aiModels } from '../db/schema.js';
 import { getAuthFromRequest, JwtPayload } from '../lib/auth.js';
 import { checkBilling, calculateCost, deductBalance, logUsage, getMarkupPercent, UsageCost } from '../lib/billing.js';
+import { getProviderApiKey, getGeminiKey } from '../lib/provider-keys.js';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -40,9 +41,10 @@ export async function aiRoutes(app: FastifyInstance) {
   app.get('/ai/health', async (_req, reply) => reply.send({ ok: true, service: 'ai' }));
 
   app.get('/ai/models', async (_req, reply) => {
-    if (!GEMINI_API_KEY) return reply.status(500).send({ error: 'GEMINI_API_KEY не настроен' });
+    const key = await getGeminiKey();
+    if (!key) return reply.status(500).send({ error: 'API-ключ Gemini не настроен' });
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
       const data = await res.json();
       if (!res.ok) return reply.status(res.status).send(data);
       const models = (data.models || []).map((m: { name: string; supportedGenerationMethods?: string[] }) => ({
@@ -59,13 +61,16 @@ export async function aiRoutes(app: FastifyInstance) {
   }>('/ai/chat', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
-    if (!GEMINI_API_KEY) return reply.status(500).send({ error: 'GEMINI_API_KEY не настроен' });
 
     const { messages = [], modelId } = req.body || {};
+    const dbModel = await resolveModel(modelId, 'text');
+    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
+    const key = apiKey || GEMINI_API_KEY;
+    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
+
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
-    const dbModel = await resolveModel(modelId, 'text');
     const modelKey = dbModel?.modelKey || FALLBACK_CHAT_MODEL;
     const modelsToTry = dbModel ? [modelKey] : FALLBACK_CHAT_LIST;
 
@@ -80,7 +85,7 @@ export async function aiRoutes(app: FastifyInstance) {
     let res: Response | null = null;
     let lastErr = '';
     for (const model of modelsToTry) {
-      const url = `${GEMINI_STREAM_URL(model)}?key=${GEMINI_API_KEY}&alt=sse`;
+      const url = `${GEMINI_STREAM_URL(model)}?key=${key}&alt=sse`;
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,15 +158,18 @@ export async function aiRoutes(app: FastifyInstance) {
   }>('/ai/image', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
-    if (!GEMINI_API_KEY) return reply.status(500).send({ error: 'GEMINI_API_KEY не настроен' });
 
     const { prompt, image, images: imagesRaw, modelId } = req.body || {};
     if (!prompt?.trim()) return reply.status(400).send({ error: 'prompt обязателен' });
 
+    const dbModel = await resolveModel(modelId, 'image');
+    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
+    const key = apiKey || GEMINI_API_KEY;
+    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
+
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
-    const dbModel = await resolveModel(modelId, 'image');
     const modelKey = dbModel?.modelKey || FALLBACK_IMAGE_MODEL;
     const modelsToTry = dbModel ? [modelKey] : FALLBACK_IMAGE_LIST;
 
@@ -180,7 +188,7 @@ export async function aiRoutes(app: FastifyInstance) {
     let res: Response | null = null;
     let lastErr = '';
     for (const model of modelsToTry) {
-      const url = `${GEMINI_GENERATE_URL(model)}?key=${GEMINI_API_KEY}`;
+      const url = `${GEMINI_GENERATE_URL(model)}?key=${key}`;
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,14 +259,17 @@ export async function aiRoutes(app: FastifyInstance) {
   }>('/ai/quiz', async (req, reply) => {
     const payload = requireAuth(req, reply);
     if (!payload) return;
-    if (!GEMINI_API_KEY) return reply.status(500).send({ error: 'GEMINI_API_KEY не настроен' });
+
+    const dbModel = await resolveModel(undefined, 'text');
+    const apiKey = dbModel ? await getProviderApiKey(dbModel.providerId) : null;
+    const key = apiKey || GEMINI_API_KEY;
+    if (!key) return reply.status(500).send({ error: 'API-ключ не настроен. Добавьте ключ в провайдере или GEMINI_API_KEY в .env' });
 
     const billing = await checkBilling(payload.userId, payload.role === 'admin');
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
     const { lessonTitle, lessonDescription, videoTopics = [], userAnswer, conversationHistory = [], customPrompt, learningState } = req.body || {};
 
-    const dbModel = await resolveModel(undefined, 'text');
     const chatModel = dbModel?.modelKey || FALLBACK_CHAT_MODEL;
 
     const isInitialization = conversationHistory.length === 0;
@@ -338,7 +349,7 @@ ${JSON.stringify(learningState, null, 2)}`;
       }],
     }];
 
-    const url = `${GEMINI_GENERATE_URL(chatModel)}?key=${GEMINI_API_KEY}`;
+    const url = `${GEMINI_GENERATE_URL(chatModel)}?key=${key}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

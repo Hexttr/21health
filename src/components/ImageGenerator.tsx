@@ -7,6 +7,7 @@ import { ModelSelector } from '@/components/ModelSelector';
 import { useBalance } from '@/contexts/BalanceContext';
 import { useChatContext } from '@/contexts/ChatContext';
 import { resizeImageForUpload, resizeForStorage } from '@/lib/imageUtils';
+import { putFullImage, getFullImage } from '@/lib/imageStore';
 
 const STORAGE_KEY = 'ai-chat-nanobanana';
 const MAX_IMAGES = 14;
@@ -20,10 +21,11 @@ type ImageMessage = {
 } | {
   role: 'assistant';
   imageUrl: string;
+  fullImageId?: string;
 };
 
-/** Stored format: assistant stores compressed thumbnail (~30–50KB) for persistence */
-type StoredMessage = { role: 'user'; content: string } | { role: 'assistant'; imageUrl?: string };
+/** Превью в localStorage, полное — в IndexedDB */
+type StoredMessage = { role: 'user'; content: string } | { role: 'assistant'; imageUrl?: string; fullImageId?: string };
 
 export function ImageGenerator() {
   const [messages, setMessages] = useState<ImageMessage[]>([]);
@@ -51,7 +53,11 @@ export function ImageGenerator() {
         if (Array.isArray(parsed)) {
           const loaded: ImageMessage[] = parsed.map((m) => {
             if (m.role === 'user') return { role: 'user' as const, content: m.content };
-            return { role: 'assistant' as const, imageUrl: m.imageUrl || PLACEHOLDER_SVG };
+            return {
+              role: 'assistant' as const,
+              imageUrl: m.imageUrl || PLACEHOLDER_SVG,
+              ...(m.fullImageId && { fullImageId: m.fullImageId }),
+            };
           });
           setMessages(loaded);
         }
@@ -65,20 +71,30 @@ export function ImageGenerator() {
     if (messages.length === 0) return;
     let cancelled = false;
     const run = async () => {
-      const toStore: StoredMessage[] = await Promise.all(
-        messages.slice(-30).map(async (m) => {
-          if (m.role === 'user') return { role: 'user', content: m.content };
-          if (m.role === 'assistant' && m.imageUrl && !m.imageUrl.includes('<svg')) {
-            try {
-              const compressed = await resizeForStorage(m.imageUrl);
-              return { role: 'assistant', imageUrl: compressed };
-            } catch {
-              return { role: 'assistant' };
+      const slice = messages.slice(-30);
+      const toStore: StoredMessage[] = [];
+      let assistantIdx = 0;
+      for (const m of slice) {
+        if (m.role === 'user') {
+          toStore.push({ role: 'user', content: m.content });
+          continue;
+        }
+        if (m.role === 'assistant' && m.imageUrl && !m.imageUrl.includes('<svg')) {
+          try {
+            const compressed = await resizeForStorage(m.imageUrl);
+            const fullImageId = m.fullImageId ?? `img_${assistantIdx}`;
+            if (!m.fullImageId) {
+              await putFullImage(fullImageId, m.imageUrl);
             }
+            toStore.push({ role: 'assistant', imageUrl: compressed, fullImageId });
+          } catch {
+            toStore.push({ role: 'assistant' });
           }
-          return { role: 'assistant' };
-        })
-      );
+          assistantIdx++;
+        } else {
+          toStore.push({ role: 'assistant' });
+        }
+      }
       if (!cancelled) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
@@ -276,9 +292,14 @@ export function ImageGenerator() {
                       size="sm"
                       variant="secondary"
                       className="absolute top-2 right-2 rounded-lg gap-1 shadow-md"
-                      onClick={() => {
+                      onClick={async () => {
+                        let url = msg.imageUrl;
+                        if (msg.fullImageId) {
+                          const full = await getFullImage(msg.fullImageId);
+                          if (full) url = full;
+                        }
                         const link = document.createElement('a');
-                        link.href = msg.imageUrl;
+                        link.href = url;
                         link.download = `generated-${Date.now()}.png`;
                         link.click();
                       }}
