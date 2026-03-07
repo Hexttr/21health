@@ -208,9 +208,9 @@ export async function aiRoutes(app: FastifyInstance) {
     if (content) {
       for (const part of content) {
         // API may return inlineData (camelCase) or inline_data (snake_case)
-        const p = part as { inlineData?: { mimeType?: string; data: string }; inline_data?: { mime_type?: string; data: string } };
-        const inline = p.inlineData ?? p.inline_data;
-        const mime = inline && ('mimeType' in inline ? inline.mimeType : inline.mime_type);
+        const p = part as Record<string, unknown>;
+        const inline = (p.inlineData ?? p.inline_data) as { mimeType?: string; mime_type?: string; data: string } | undefined;
+        const mime = inline?.mimeType ?? inline?.mime_type;
         const b64 = inline?.data;
         if (b64) {
           imageUrl = `data:${mime || 'image/png'};base64,${b64}`;
