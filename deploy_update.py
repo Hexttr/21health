@@ -42,22 +42,25 @@ def main():
         print("2. Fast-forward обновление ветки ubuntu...")
         run_ssh(client, f"cd {DEPLOY_DIR} && git fetch origin && git checkout {BRANCH} && git pull --ff-only origin {BRANCH}")
 
-        print("3. Миграции БД...")
+        print("3. Установка server-зависимостей...")
+        run_ssh(client, f"cd {DEPLOY_DIR}/server && npm install")
+
+        print("4. Миграции БД...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:migrate")
 
-        print("4. Frontend build...")
+        print("5. Frontend build...")
         run_ssh(client, f"cd {DEPLOY_DIR} && VITE_API_URL=/api npm run build")
 
-        print("5. Server build...")
+        print("6. Server build...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run build")
 
-        print("6. DB seed-billing...")
+        print("7. DB seed-billing...")
         run_ssh(client, f"cd {DEPLOY_DIR}/server && npm run db:seed-billing", check=False)
 
-        print("7. PM2 restart only for 21day...")
+        print("8. PM2 restart only for 21day...")
         run_ssh(client, "pm2 restart 21day")
 
-        print("8. Post-checks...")
+        print("9. Post-checks...")
         run_ssh(client, "pm2 show 21day >/dev/null && curl -fsS https://21day.club/api/ai/health >/dev/null")
 
         print("\nГотово. https://21day.club")
