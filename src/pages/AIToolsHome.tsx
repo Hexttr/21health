@@ -6,10 +6,11 @@ import {
   ImageIcon,
   Sparkles,
   Stars,
-  Wand2,
-  Zap,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import textBanner from "../../assets/ai-text-banner.png";
+import documentBanner from "../../assets/ai-document-banner.png";
+import visualBanner from "../../assets/ai-visual-banner.png";
 
 import { BalanceWidget } from "@/components/BalanceWidget";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ import { cn } from "@/lib/utils";
 const accentClassMap: Record<AIToolAccent, string> = {
   violet: "from-primary/18 via-primary/12 to-white/92",
   emerald: "from-emerald-500/18 via-emerald-500/12 to-white/92",
-  amber: "from-amber-500/20 via-amber-500/12 to-white/92",
+  amber: "from-primary/14 via-primary/8 to-white/94",
   sky: "from-sky-500/18 via-sky-500/12 to-white/92",
   pink: "from-fuchsia-500/18 via-pink-500/12 to-white/92",
 };
@@ -38,7 +39,7 @@ const accentClassMap: Record<AIToolAccent, string> = {
 const accentBorderMap: Record<AIToolAccent, string> = {
   violet: "border-primary/20",
   emerald: "border-emerald-500/20",
-  amber: "border-amber-500/20",
+  amber: "border-primary/18",
   sky: "border-sky-500/20",
   pink: "border-fuchsia-500/20",
 };
@@ -111,14 +112,14 @@ function ToolCard({
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-foreground/72">
-                <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/88 px-2.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/18 bg-primary/10 px-2.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
                   <CategoryIcon className="h-3.5 w-3.5" />
                   {category.label}
                 </span>
-                {tool.highlights.slice(0, featured ? 2 : 1).map((highlight) => (
+                {tool.highlights.slice(0, 1).map((highlight) => (
                   <span
                     key={highlight}
-                    className="rounded-full border border-border/70 bg-white/88 px-2.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
+                    className="rounded-full border border-primary/18 bg-primary/10 px-2.5 py-1 shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                   >
                     {highlight}
                   </span>
@@ -141,7 +142,7 @@ function ToolCard({
           {tool.capabilities.map((capability) => (
             <span
               key={capability}
-              className="whitespace-nowrap rounded-full border border-border/75 bg-white/94 px-3 py-1.5 text-xs font-medium text-foreground/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
+              className="whitespace-nowrap rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-medium text-foreground/92 shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
             >
               {capability}
             </span>
@@ -189,25 +190,25 @@ export default function AIToolsHome() {
 
   const quickStartItems = [
     {
-      title: "Нужно быстро написать текст",
+      title: "Быстро написать текст",
       description: "Быстрый старт без лишней настройки для ежедневных задач.",
       href: "/groq",
       label: "Открыть Groq",
-      icon: Zap,
+      image: "/ai-text-banner.png",
     },
     {
-      title: "Разобрать документ или длинный текст",
+      title: "Проанализировать документ",
       description: "Когда нужен вдумчивый анализ файлов, заметок и рабочих материалов.",
       href: "/chatgpt",
       label: "Открыть ChatGPT",
-      icon: FileText,
+      image: "/ai-document-banner.png",
     },
     {
-      title: "Сделать визуал или вариацию картинки",
+      title: "Визуальный креатив",
       description: "Генерация изображений, правки по референсу и быстрые креативные итерации.",
       href: "/nanobanana",
       label: "Открыть NanoBanana",
-      icon: Wand2,
+      image: "/ai-visual-banner.png",
     },
   ];
 
@@ -289,11 +290,11 @@ export default function AIToolsHome() {
             <div className="space-y-3">
               {!isAIUser && (
                 <div className="rounded-[26px] border border-white/26 bg-white/92 p-3.5 text-foreground shadow-[0_16px_40px_rgba(255,255,255,0.14)] backdrop-blur-xl">
-                  <BalanceWidget />
+                  <BalanceWidget variant="hero" />
                 </div>
               )}
               <div className="rounded-[26px] border border-white/24 bg-white/16 p-4 text-white shadow-[0_16px_40px_rgba(22,28,45,0.16)] backdrop-blur-xl">
-                <div className="ai-kicker text-white/78">Быстрый старт</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/95">Быстрый старт</div>
                 <div className="mt-2 space-y-2.5">
                   {recommendedTools.slice(0, 2).map((tool) => (
                     <NavLink
@@ -369,14 +370,17 @@ export default function AIToolsHome() {
 
           <div className="grid gap-4 md:grid-cols-3">
             {quickStartItems.map((item) => {
-              const Icon = item.icon;
               return (
                 <article
                   key={item.title}
-                  className="rounded-[28px] border border-border/70 bg-card p-4 shadow-soft"
+                  className="flex h-full flex-col rounded-[28px] border border-border/70 bg-card p-4 shadow-soft"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <Icon className="h-5 w-5" />
+                  <div className="overflow-hidden rounded-[22px] border border-primary/12 bg-primary/6">
+                    <img
+                      src={item.image}
+                      alt=""
+                      className="h-28 w-full object-cover object-center md:h-24"
+                    />
                   </div>
                   <h3 className="mt-4 text-lg font-semibold text-foreground">
                     {item.title}
@@ -386,8 +390,7 @@ export default function AIToolsHome() {
                   </p>
                   <Button
                     asChild
-                    variant="outline"
-                    className="mt-4 h-10 rounded-xl border-border/70 bg-background/92 shadow-xs hover:bg-background"
+                    className="mt-5 h-10 rounded-xl shadow-xs md:mt-auto"
                   >
                     <NavLink to={item.href}>
                       {item.label}

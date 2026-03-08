@@ -5,9 +5,10 @@ import { NavLink } from 'react-router-dom';
 
 interface BalanceWidgetProps {
   compact?: boolean;
+  variant?: 'default' | 'hero';
 }
 
-export function BalanceWidget({ compact }: BalanceWidgetProps) {
+export function BalanceWidget({ compact, variant = 'default' }: BalanceWidgetProps) {
   const { balance, isLoading } = useBalance();
 
   if (compact) {
@@ -28,21 +29,29 @@ export function BalanceWidget({ compact }: BalanceWidgetProps) {
   return (
     <NavLink
       to="/topup"
-      className="flex items-center gap-3 p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors group"
-      style={{ background: 'hsl(263 52% 50% / 0.07)' }}
+      className={
+        variant === 'hero'
+          ? "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors group"
+          : "flex items-center gap-3 p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors group"
+      }
+      style={variant === 'hero' ? undefined : { background: 'hsl(263 52% 50% / 0.07)' }}
     >
-      <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
-        <Wallet className="w-4 h-4 text-primary" />
+      <div className={variant === 'hero'
+        ? "flex h-8 w-8 items-center justify-center rounded-lg bg-primary/14"
+        : "w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center"}>
+        <Wallet className={variant === 'hero' ? "h-4 w-4 text-primary" : "w-4 h-4 text-primary"} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">Баланс</span>
-          <span className="text-sm font-bold text-primary">
+          <span className={variant === 'hero' ? "text-xs font-semibold text-foreground/95" : "text-xs font-semibold text-foreground"}>Баланс</span>
+          <span className={variant === 'hero' ? "text-sm font-bold text-primary" : "text-sm font-bold text-primary"}>
             {isLoading ? '...' : `${balance.toFixed(2)} ₽`}
           </span>
         </div>
       </div>
-      <Plus className="w-4 h-4 text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
+      <Plus className={variant === 'hero'
+        ? "w-4 h-4 text-primary/90 opacity-90 group-hover:opacity-100 transition-opacity"
+        : "w-4 h-4 text-primary opacity-50 group-hover:opacity-100 transition-opacity"} />
     </NavLink>
   );
 }
