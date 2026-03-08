@@ -8,9 +8,6 @@ import {
   Stars,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import textBanner from "../../assets/ai-text-banner.png";
-import documentBanner from "../../assets/ai-document-banner.png";
-import visualBanner from "../../assets/ai-visual-banner.png";
 
 import { BalanceWidget } from "@/components/BalanceWidget";
 import { Button } from "@/components/ui/button";
@@ -289,7 +286,7 @@ export default function AIToolsHome() {
 
             <div className="space-y-3">
               {!isAIUser && (
-                <div className="rounded-[26px] border border-white/26 bg-white/92 p-3.5 text-foreground shadow-[0_16px_40px_rgba(255,255,255,0.14)] backdrop-blur-xl">
+                <div className="rounded-[26px] border border-white/40 bg-white p-3.5 text-foreground shadow-[0_16px_40px_rgba(255,255,255,0.14)] backdrop-blur-xl">
                   <BalanceWidget variant="hero" />
                 </div>
               )}
@@ -373,30 +370,32 @@ export default function AIToolsHome() {
               return (
                 <article
                   key={item.title}
-                  className="flex h-full flex-col rounded-[28px] border border-border/70 bg-card p-4 shadow-soft"
+                  className="flex h-full flex-col overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-soft"
                 >
-                  <div className="overflow-hidden rounded-[22px] border border-primary/12 bg-primary/6">
+                  <div className="overflow-hidden border-b border-primary/10 bg-primary/6">
                     <img
                       src={item.image}
                       alt=""
-                      className="h-28 w-full object-cover object-center md:h-24"
+                      className="h-32 w-full object-cover object-center md:h-28"
                     />
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold text-foreground">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {item.description}
-                  </p>
-                  <Button
-                    asChild
-                    className="mt-5 h-10 rounded-xl shadow-xs md:mt-auto"
-                  >
-                    <NavLink to={item.href}>
-                      {item.label}
-                      <ArrowRight className="h-4 w-4" />
-                    </NavLink>
-                  </Button>
+                  <div className="flex flex-1 flex-col p-4">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      {item.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {item.description}
+                    </p>
+                    <Button
+                      asChild
+                      className="mt-6 h-10 rounded-xl shadow-xs md:mt-auto"
+                    >
+                      <NavLink to={item.href}>
+                        {item.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </NavLink>
+                    </Button>
+                  </div>
                 </article>
               );
             })}
