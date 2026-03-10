@@ -276,12 +276,12 @@ export function LoginForm() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="name-register" className="text-sm font-medium">
-                        Имя
+                        Ф.И.О.
                       </Label>
                       <Input
                         id="name-register"
                         type="text"
-                        placeholder="Ваше имя"
+                        placeholder="Ваше Ф.И.О."
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required
