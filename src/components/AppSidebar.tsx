@@ -186,56 +186,57 @@ export function AppSidebar() {
         )}
 
         {/* ── AI Tools ── */}
-        <SidebarGroup className={!collapsed ? "px-3 pb-3 pt-0" : undefined}>
-          <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 shadow-xs">
-          <SidebarGroupLabel className="h-auto px-0 pb-0 pt-0">
-            {!collapsed ? (
-              <div className="w-full">
-                <NavLink
-                  to="/ai"
-                  onClick={() => setOpenMobile(false)}
-                  className="flex items-center gap-3 rounded-lg px-1 transition-colors hover:text-foreground/90"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-foreground">Инструменты ИИ</div>
-                    <div className="text-[10px] text-muted-foreground">Модели и сервисы</div>
-                  </div>
-                </NavLink>
-                <div className="mt-3 h-px bg-border/70" />
-              </div>
-            ) : (
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-                ИИ
-              </span>
-            )}
-          </SidebarGroupLabel>
-          <SidebarGroupContent className={!collapsed ? "pt-3" : undefined}>
-            {!collapsed && freeToolItems.length > 0 && renderToolMenu(freeToolItems)}
-            {!collapsed && paidToolItems.length > 0 && renderToolMenu(paidToolItems)}
-            {collapsed && renderToolMenu([...freeToolItems, ...paidToolItems])}
-          </SidebarGroupContent>
-          </div>
+        <SidebarGroup className={collapsed ? "px-2 pb-2 pt-0" : "px-3 pb-3 pt-0"}>
+          {collapsed ? (
+            <SidebarGroupContent>
+              {renderToolMenu([...freeToolItems, ...paidToolItems])}
+            </SidebarGroupContent>
+          ) : (
+            <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 shadow-xs">
+              <SidebarGroupLabel className="h-auto px-0 pb-0 pt-0">
+                <div className="w-full">
+                  <NavLink
+                    to="/ai"
+                    onClick={() => setOpenMobile(false)}
+                    className="flex items-center gap-3 rounded-lg px-1 transition-colors hover:text-foreground/90"
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-foreground">Инструменты ИИ</div>
+                      <div className="text-[10px] text-muted-foreground">Модели и сервисы</div>
+                    </div>
+                  </NavLink>
+                  <div className="mt-3 h-px bg-border/70" />
+                </div>
+              </SidebarGroupLabel>
+              <SidebarGroupContent className="pt-3">
+                {freeToolItems.length > 0 && renderToolMenu(freeToolItems)}
+                {paidToolItems.length > 0 && renderToolMenu(paidToolItems)}
+              </SidebarGroupContent>
+            </div>
+          )}
         </SidebarGroup>
 
         {/* ── Admin ── */}
         {isAdmin && (
           <>
-            <SidebarSeparator className="mx-3 my-0" />
-            <SidebarGroup className={!collapsed ? "px-3 pb-2 pt-3" : undefined}>
-              <SidebarGroupLabel className="h-auto px-0 pb-3 pt-0">
-                <div className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-background/65 px-3 py-3 shadow-xs">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/12">
-                    <Shield className="h-4 w-4 text-primary" />
+            <SidebarSeparator className={collapsed ? "mx-2 my-0" : "mx-3 my-0"} />
+            <SidebarGroup className={collapsed ? "px-2 pb-2 pt-3" : "px-3 pb-2 pt-3"}>
+              {!collapsed && (
+                <SidebarGroupLabel className="h-auto px-0 pb-3 pt-0">
+                  <div className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-background/65 px-3 py-3 shadow-xs">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/12">
+                      <Shield className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-foreground">Администрирование</div>
+                      <div className="text-[10px] text-muted-foreground">Управление платформой</div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-foreground">Администрирование</div>
-                    <div className="text-[10px] text-muted-foreground">Управление платформой</div>
-                  </div>
-                </div>
-              </SidebarGroupLabel>
+                </SidebarGroupLabel>
+              )}
               <SidebarGroupContent>
                 <SidebarMenu className="gap-1.5">
                   {adminItems.map((item) => {
