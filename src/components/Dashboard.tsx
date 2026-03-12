@@ -246,11 +246,6 @@ export function Dashboard() {
           </section>
         )}
 
-        <TestimonialsSection
-          variant="dashboard"
-          className="mb-8 sm:mb-10"
-        />
-
         {/* ── Course Content ── */}
         <section className="animate-fade-in-up" style={{ animationDelay: '150ms' }}>
           <div className="flex items-center gap-3 mb-5">
@@ -290,6 +285,11 @@ export function Dashboard() {
           </div>
           <PracticalMaterials />
         </section>
+
+        <TestimonialsSection
+          variant="dashboard"
+          className="mt-10 sm:mt-12"
+        />
 
         <div className="h-8" />
       </main>

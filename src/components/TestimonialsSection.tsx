@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeft, ArrowRight, Quote, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, MessageCircle, Quote, Sparkles } from "lucide-react";
 
 import { api } from "@/api/client";
 import { TestimonialAvatar } from "@/components/TestimonialAvatar";
@@ -32,10 +32,9 @@ const sectionCopy = {
       "border-primary/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,245,255,0.96))] shadow-[0_28px_60px_rgba(124,58,237,0.12)]",
   },
   dashboard: {
-    kicker: "Отзывы участников",
-    title: "Что особенно ценят в платформе",
-    description:
-      "Опыт студентов и пользователей, которые уже совмещают курс и AI-инструменты в одной системе.",
+    kicker: "",
+    title: "Отзывы участников",
+    description: "",
     shellClassName:
       "border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(251,247,255,0.98))] shadow-[0_24px_50px_rgba(91,33,182,0.1)]",
   },
@@ -100,6 +99,18 @@ export function TestimonialsSection({
 
   return (
     <section className={cn("animate-fade-in-up", className)}>
+      {variant === "dashboard" && (
+        <div className="mb-5 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <MessageCircle className="text-primary" style={{ width: "16px", height: "16px" }} />
+          </div>
+          <h2 className="font-serif text-xl sm:text-2xl font-semibold text-foreground">
+            {copy.title}
+          </h2>
+          <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent" />
+        </div>
+      )}
+
       <div
         className={cn(
           "overflow-hidden rounded-[32px] border px-5 py-5 md:px-7 md:py-7",
@@ -108,13 +119,17 @@ export function TestimonialsSection({
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <div className="ai-kicker">{copy.kicker}</div>
-            <h2 className="mt-1 text-2xl font-semibold text-foreground md:text-[2rem]">
-              {copy.title}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
-              {copy.description}
-            </p>
+            {variant === "public" ? (
+              <>
+                <div className="ai-kicker">{copy.kicker}</div>
+                <h2 className="mt-1 text-2xl font-semibold text-foreground md:text-[2rem]">
+                  {copy.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground md:text-base">
+                  {copy.description}
+                </p>
+              </>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-auto">
@@ -124,7 +139,7 @@ export function TestimonialsSection({
               size="icon"
               onClick={() => carouselApi?.scrollPrev()}
               disabled={!canScrollPrev}
-              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 hover:bg-white"
+              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -134,7 +149,7 @@ export function TestimonialsSection({
               size="icon"
               onClick={() => carouselApi?.scrollNext()}
               disabled={!canScrollNext}
-              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 hover:bg-white"
+              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
             >
               <ArrowRight className="h-4 w-4" />
             </Button>
