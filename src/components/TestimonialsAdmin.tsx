@@ -33,8 +33,8 @@ interface TestimonialAdminItem {
 
 const emptyDraft = {
   name: "Новый отзыв",
-  roleOrSubtitle: "",
-  text: "",
+  roleOrSubtitle: "Участник платформы",
+  text: "Добавьте текст отзыва, чтобы он появился в публичном слайдере.",
   avatarVariant: "female" as AvatarVariant,
   sortOrder: 0,
   isPublished: false,

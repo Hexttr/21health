@@ -355,7 +355,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-7xl px-4 pb-8 pt-6 sm:px-6 lg:px-10 lg:pb-10">
+      <div className="w-full px-4 pb-8 pt-6 sm:px-6 lg:px-10 lg:pb-10">
         <TestimonialsSection variant="public" />
       </div>
     </div>

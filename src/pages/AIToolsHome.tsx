@@ -286,7 +286,7 @@ export default function AIToolsHome() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {!isAIUser && (
                 <div className="rounded-[26px] border border-white/40 bg-white p-3.5 text-foreground shadow-[0_16px_40px_rgba(255,255,255,0.14)] backdrop-blur-xl">
                   <BalanceWidget variant="hero" />
@@ -420,11 +420,11 @@ export default function AIToolsHome() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex w-full max-w-sm flex-col gap-3">
                 <Button
                   size="lg"
                   onClick={() => setWaitlistOpen(true)}
-                  className="rounded-2xl bg-white text-primary shadow-lg hover:bg-white/92"
+                  className="h-12 w-full rounded-2xl bg-white px-8 text-primary shadow-lg hover:bg-white/92"
                 >
                   Записаться
                   <ArrowRight className="h-4 w-4" />

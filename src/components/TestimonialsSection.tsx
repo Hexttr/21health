@@ -30,6 +30,8 @@ const sectionCopy = {
       "Короткие живые отзывы тех, кто уже встроил ИИ в учебу, контент и ежедневную практику.",
     shellClassName:
       "border-primary/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,245,255,0.96))] shadow-[0_28px_60px_rgba(124,58,237,0.12)]",
+    showArrows: true,
+    itemClassName: "pl-4 sm:basis-1/2 xl:basis-1/3 2xl:basis-1/4",
   },
   dashboard: {
     kicker: "",
@@ -37,6 +39,8 @@ const sectionCopy = {
     description: "",
     shellClassName:
       "border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(251,247,255,0.98))] shadow-[0_24px_50px_rgba(91,33,182,0.1)]",
+    showArrows: false,
+    itemClassName: "pl-4 md:basis-1/2 xl:basis-1/3",
   },
 } as const;
 
@@ -132,28 +136,30 @@ export function TestimonialsSection({
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => carouselApi?.scrollPrev()}
-              disabled={!canScrollPrev}
-              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => carouselApi?.scrollNext()}
-              disabled={!canScrollNext}
-              className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
+          {copy.showArrows ? (
+            <div className="flex items-center gap-2 self-start md:self-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => carouselApi?.scrollPrev()}
+                disabled={!canScrollPrev}
+                className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => carouselApi?.scrollNext()}
+                disabled={!canScrollNext}
+                className="h-10 w-10 rounded-full border-primary/15 bg-white/80 text-foreground hover:bg-white hover:text-foreground active:text-foreground focus:text-foreground focus-visible:text-foreground [&_svg]:text-foreground"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <Carousel
@@ -165,7 +171,7 @@ export function TestimonialsSection({
             {items.map((item) => (
               <CarouselItem
                 key={item.id}
-                className="pl-4 md:basis-1/2 xl:basis-1/3"
+                className={copy.itemClassName}
               >
                 <article className="flex h-full flex-col rounded-[28px] border border-primary/12 bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm">
                   <div className="flex items-start justify-between gap-3">
