@@ -3,6 +3,7 @@ import { eq, asc } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lessonContent } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
+import { getLessonAccessState } from '../lib/lesson-access.js';
 
 export async function lessonRoutes(app: FastifyInstance) {
   // Get published lessons (authenticated, ai_user — нет доступа)
@@ -35,13 +36,28 @@ export async function lessonRoutes(app: FastifyInstance) {
     if (isNaN(lessonId)) {
       return reply.status(400).send({ error: 'Некорректный ID урока' });
     }
+
+    const accessState = await getLessonAccessState(payload.userId, lessonId, payload.role);
+    if (!accessState.lessonExists) {
+      return reply.status(404).send({ error: 'Урок не найден' });
+    }
+
+    if (!accessState.isPublished && payload.role !== 'admin') {
+      return reply.status(404).send({ error: 'Урок не найден' });
+    }
+
+    if (!accessState.canAccess && payload.role !== 'admin') {
+      return reply.status(423).send({
+        error: 'Сначала завершите AI-тест по предыдущему уроку',
+        previousLessonId: accessState.previousLessonId,
+      });
+    }
+
     const [row] = await db.select().from(lessonContent).where(eq(lessonContent.lessonId, lessonId));
     if (!row) {
       return reply.status(404).send({ error: 'Урок не найден' });
     }
-    if (!row.isPublished && payload.role !== 'admin') {
-      return reply.status(404).send({ error: 'Урок не найден' });
-    }
+
     return reply.send(row);
   });
 

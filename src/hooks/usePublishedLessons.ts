@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -93,8 +93,14 @@ export function usePublishedLessons() {
     await loadPublishedLessons(true);
   }, [loadPublishedLessons]);
 
+  const publishedLessonIds = useMemo(
+    () => Array.from(publishedLessons).sort((a, b) => a - b),
+    [publishedLessons]
+  );
+
   return { 
     isLessonPublished, 
+    publishedLessonIds,
     loading, 
     refreshPublishedLessons, 
     publishedCount: publishedLessons.size 

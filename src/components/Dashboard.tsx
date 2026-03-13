@@ -33,17 +33,64 @@ import {
 export function Dashboard() {
   const { user, signOut } = useAuth();
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
-  const { getCompletedCount, getProgressPercentage, isLessonCompleted, isLoading: isProgressLoading, refreshProgress } = useProgress();
-  const { isLessonPublished, loading: isLessonsLoading, refreshPublishedLessons } = usePublishedLessons();
+  const {
+    getCompletedCount,
+    getProgressPercentage,
+    isLessonCompleted,
+    isQuizCompleted,
+    hasLessonProgress,
+    isLoading: isProgressLoading,
+    refreshProgress,
+  } = useProgress();
+  const {
+    isLessonPublished,
+    publishedLessonIds,
+    loading: isLessonsLoading,
+    refreshPublishedLessons,
+  } = usePublishedLessons();
   const { impersonatedUser, isImpersonating, stopImpersonation } = useImpersonation();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const completedCount = isProgressLoading ? 0 : getCompletedCount();
   const progressPercentage = isProgressLoading ? 0 : getProgressPercentage();
   const selectedLesson = selectedLessonId ? getLessonById(selectedLessonId) : null;
+  const isDataLoading = isLessonsLoading || isProgressLoading;
 
   const allLessons = courseData.flatMap(week => week.lessons);
-  const nextLesson = allLessons.find(lesson => !isLessonCompleted(lesson.id) && isLessonPublished(lesson.id));
+  const getPreviousPublishedLessonId = (lessonId: number) => {
+    const lessonIndex = publishedLessonIds.indexOf(lessonId);
+    if (lessonIndex <= 0) {
+      return null;
+    }
+    return publishedLessonIds[lessonIndex - 1] ?? null;
+  };
+
+  const canAccessLesson = (lessonId: number) => {
+    if (!isLessonPublished(lessonId)) {
+      return false;
+    }
+
+    if (hasLessonProgress(lessonId)) {
+      return true;
+    }
+
+    const previousLessonId = getPreviousPublishedLessonId(lessonId);
+    if (previousLessonId === null) {
+      return true;
+    }
+
+    return isQuizCompleted(previousLessonId);
+  };
+
+  const getLessonLockReason = (lessonId: number) => {
+    if (!isLessonPublished(lessonId)) {
+      return 'unpublished';
+    }
+
+    return canAccessLesson(lessonId) ? null : 'previous_quiz_incomplete';
+  };
+
+  const nextLesson = allLessons.find((lesson) => canAccessLesson(lesson.id) && !isLessonCompleted(lesson.id));
   const allCompleted = completedCount >= 21;
 
   const firstName = user?.name?.split(' ')[0] || 'Студент';
@@ -60,7 +107,7 @@ export function Dashboard() {
     }
   };
 
-  if (selectedLesson && isLessonPublished(selectedLesson.id)) {
+  if (selectedLesson) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
         {/* Minimal top bar for lesson view (mobile only) */}
@@ -74,8 +121,14 @@ export function Dashboard() {
           <LessonView
             lesson={selectedLesson}
             onBack={() => setSelectedLessonId(null)}
-            onNavigateToLesson={(id) => { if (isLessonPublished(id)) setSelectedLessonId(id); }}
+            onNavigateToLesson={(id) => {
+              if (canAccessLesson(id)) {
+                setSelectedLessonId(id);
+              }
+            }}
             isLessonPublished={isLessonPublished}
+            canAccessLesson={canAccessLesson}
+            getLessonLockReason={getLessonLockReason}
           />
         </div>
       </div>
@@ -266,7 +319,9 @@ export function Dashboard() {
                 onSelectLesson={setSelectedLessonId}
                 defaultOpen={false}
                 isLessonPublished={isLessonPublished}
-                isDataLoading={isLessonsLoading || isProgressLoading}
+                canAccessLesson={canAccessLesson}
+                getLessonLockReason={getLessonLockReason}
+                isDataLoading={isDataLoading}
               />
             ))}
           </div>

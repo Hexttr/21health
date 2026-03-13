@@ -3,6 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studentProgress } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
+import { getLessonAccessState } from '../lib/lesson-access.js';
 
 export async function progressRoutes(app: FastifyInstance) {
   // Get my progress (or specific user's if admin impersonating)
@@ -42,14 +43,36 @@ export async function progressRoutes(app: FastifyInstance) {
       .select()
       .from(studentProgress)
       .where(and(eq(studentProgress.userId, payload.userId), eq(studentProgress.lessonId, lessonId)));
-    const completedAt = completed || quizCompleted ? new Date() : null;
+
+    const accessState = await getLessonAccessState(payload.userId, lessonId, payload.role);
+    if (!accessState.lessonExists) {
+      return reply.status(404).send({ error: 'Урок не найден' });
+    }
+    if (!accessState.isPublished && payload.role !== 'admin') {
+      return reply.status(404).send({ error: 'Урок не найден' });
+    }
+    if (!accessState.canAccess && payload.role !== 'admin') {
+      return reply.status(423).send({
+        error: 'Нельзя сохранить прогресс: сначала завершите AI-тест по предыдущему уроку',
+        previousLessonId: accessState.previousLessonId,
+      });
+    }
+
+    if (completed === true && quizCompleted !== true && !existing?.quizCompleted) {
+      return reply.status(400).send({ error: 'Урок считается завершенным только после AI-теста' });
+    }
+
+    const nextQuizCompleted = quizCompleted ?? existing?.quizCompleted ?? false;
+    const nextCompleted = nextQuizCompleted || (completed ?? existing?.completed ?? false);
+    const completedAt = nextQuizCompleted || nextCompleted ? new Date() : null;
+
     let row;
     if (existing) {
       [row] = await db
         .update(studentProgress)
         .set({
-          completed: completed ?? existing.completed ?? false,
-          quizCompleted: quizCompleted ?? existing.quizCompleted ?? false,
+          completed: nextCompleted,
+          quizCompleted: nextQuizCompleted,
           completedAt: completedAt ?? existing.completedAt,
         })
         .where(eq(studentProgress.id, existing.id))
@@ -60,8 +83,8 @@ export async function progressRoutes(app: FastifyInstance) {
         .values({
           userId: payload.userId,
           lessonId,
-          completed: completed ?? false,
-          quizCompleted: quizCompleted ?? false,
+          completed: nextCompleted,
+          quizCompleted: nextQuizCompleted,
           completedAt,
         })
         .returning();

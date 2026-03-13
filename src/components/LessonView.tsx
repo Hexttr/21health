@@ -29,6 +29,8 @@ interface LessonViewProps {
   onBack: () => void;
   onNavigateToLesson: (lessonId: number) => void;
   isLessonPublished: (lessonId: number) => boolean;
+  canAccessLesson: (lessonId: number) => boolean;
+  getLessonLockReason: (lessonId: number) => 'unpublished' | 'previous_quiz_incomplete' | null;
 }
 
 interface LessonContent {
@@ -39,8 +41,15 @@ interface LessonContent {
   additional_materials: string | null;
 }
 
-export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublished }: LessonViewProps) {
-  const { isLessonCompleted, markLessonComplete, isQuizCompleted } = useProgress();
+export function LessonView({
+  lesson,
+  onBack,
+  onNavigateToLesson,
+  isLessonPublished,
+  canAccessLesson,
+  getLessonLockReason,
+}: LessonViewProps) {
+  const { isLessonCompleted, isQuizCompleted } = useProgress();
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
@@ -92,12 +101,14 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
   const quizDone = isQuizCompleted(lesson.id);
   const week = getWeekByLessonId(lesson.id);
   const isPublished = isLessonPublished(lesson.id);
+  const isAccessible = canAccessLesson(lesson.id);
+  const lockReason = getLessonLockReason(lesson.id);
 
   useEffect(() => {
-    if (isPublished) {
+    if (isPublished && isAccessible) {
       loadLessonContent();
     }
-  }, [lesson.id, isPublished]);
+  }, [lesson.id, isPublished, isAccessible]);
 
   const loadLessonContent = async () => {
     try {
@@ -128,12 +139,11 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
     return null;
   };
 
-  const handleMarkComplete = async () => {
-    await markLessonComplete(lesson.id);
-  };
+  if (!isPublished || !isAccessible) {
+    const lockMessage = lockReason === 'previous_quiz_incomplete'
+      ? 'Сначала завершите AI-тест по предыдущему уроку, и следующий урок откроется автоматически.'
+      : 'Этот урок ещё не опубликован. Пожалуйста, вернитесь позже или выберите другой урок.';
 
-  // If lesson is not published, show locked state
-  if (!isPublished) {
     return (
       <div className="animate-fade-in-up">
         <div className="flex items-center justify-between mb-6">
@@ -155,7 +165,7 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
               Урок недоступен
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto mb-6">
-              Этот урок ещё не опубликован. Пожалуйста, вернитесь позже или выберите другой урок.
+              {lockMessage}
             </p>
             <Button onClick={onBack} className="rounded-xl">
               <ChevronLeft className="w-4 h-4 mr-2" />
@@ -181,7 +191,7 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
 
         {/* Lesson navigation */}
         <div className="flex items-center gap-2">
-          {lesson.id > 1 && isLessonPublished(lesson.id - 1) && (
+          {lesson.id > 1 && canAccessLesson(lesson.id - 1) && (
             <button
               onClick={() => onNavigateToLesson(lesson.id - 1)}
               className="p-2 rounded-lg hover:bg-secondary/50 transition-colors focus-ring"
@@ -192,7 +202,7 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
           <span className="text-sm text-muted-foreground font-medium px-2">
             {lesson.id} / 21
           </span>
-          {lesson.id < 21 && isLessonPublished(lesson.id + 1) && (
+          {lesson.id < 21 && canAccessLesson(lesson.id + 1) && (
             <button
               onClick={() => onNavigateToLesson(lesson.id + 1)}
               className="p-2 rounded-lg hover:bg-secondary/50 transition-colors focus-ring"
@@ -221,12 +231,6 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
               <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success bg-success-soft px-3 py-1 rounded-lg">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Пройден
-              </span>
-            )}
-            {quizDone && (
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent bg-accent-soft px-3 py-1 rounded-lg">
-                <Sparkles className="w-3.5 h-3.5" />
-                Тест сдан
               </span>
             )}
           </div>
@@ -499,7 +503,7 @@ export function LessonView({ lesson, onBack, onNavigateToLesson, isLessonPublish
       )}
 
       {/* Actions */}
-      {lesson.id < 21 && isLessonPublished(lesson.id + 1) && (
+      {lesson.id < 21 && canAccessLesson(lesson.id + 1) && (
         <div className="flex flex-col sm:flex-row gap-3">
           <Button
             variant="outline"

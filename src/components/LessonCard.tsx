@@ -8,16 +8,27 @@ interface LessonCardProps {
   onClick: () => void;
   style?: React.CSSProperties;
   isPublished?: boolean;
+  isAccessible?: boolean;
+  lockReason?: 'unpublished' | 'previous_quiz_incomplete' | null;
   isDataLoading?: boolean;
 }
 
-export function LessonCard({ lesson, onClick, style, isPublished = false, isDataLoading = false }: LessonCardProps) {
+export function LessonCard({
+  lesson,
+  onClick,
+  style,
+  isPublished = false,
+  isAccessible = false,
+  lockReason = null,
+  isDataLoading = false,
+}: LessonCardProps) {
   const { isLessonCompleted, isQuizCompleted, isLoading: isProgressLoading } = useProgress();
   
   const completed = !isProgressLoading && isLessonCompleted(lesson.id);
   const quizDone = !isProgressLoading && isQuizCompleted(lesson.id);
   // Don't show as locked while data is loading
-  const isLocked = !isDataLoading && !isPublished;
+  const isLocked = !isDataLoading && (!isPublished || !isAccessible);
+  const lockLabel = lockReason === 'previous_quiz_incomplete' ? 'Сначала предыдущий урок' : 'Скоро';
 
   return (
     <button
@@ -80,7 +91,7 @@ export function LessonCard({ lesson, onClick, style, isPublished = false, isData
           {isLocked && (
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">
               <Lock className="w-3 h-3" />
-              Скоро
+              {lockLabel}
             </span>
           )}
           {!isLocked && quizDone && (

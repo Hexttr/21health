@@ -14,10 +14,20 @@ interface WeekCardProps {
   onSelectLesson: (lessonId: number) => void;
   defaultOpen?: boolean;
   isLessonPublished: (lessonId: number) => boolean;
+  canAccessLesson: (lessonId: number) => boolean;
+  getLessonLockReason: (lessonId: number) => 'unpublished' | 'previous_quiz_incomplete' | null;
   isDataLoading?: boolean;
 }
 
-export function WeekCard({ week, onSelectLesson, defaultOpen = false, isLessonPublished, isDataLoading = false }: WeekCardProps) {
+export function WeekCard({
+  week,
+  onSelectLesson,
+  defaultOpen = false,
+  isLessonPublished,
+  canAccessLesson,
+  getLessonLockReason,
+  isDataLoading = false,
+}: WeekCardProps) {
   const { isLessonCompleted, isLoading: isProgressLoading } = useProgress();
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
 
@@ -126,6 +136,8 @@ export function WeekCard({ week, onSelectLesson, defaultOpen = false, isLessonPu
                     onClick={() => onSelectLesson(lesson.id)}
                     style={{ animationDelay: `${index * 40}ms` }}
                     isPublished={isLessonPublished(lesson.id)}
+                    isAccessible={canAccessLesson(lesson.id)}
+                    lockReason={getLessonLockReason(lesson.id)}
                     isDataLoading={isDataLoading}
                   />
                 ))}

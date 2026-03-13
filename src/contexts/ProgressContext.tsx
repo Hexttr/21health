@@ -13,10 +13,10 @@ interface LessonProgress {
 interface ProgressContextType {
   progress: LessonProgress[];
   isLoading: boolean;
-  markLessonComplete: (lessonId: number) => Promise<void>;
   markQuizComplete: (lessonId: number) => Promise<void>;
   isLessonCompleted: (lessonId: number) => boolean;
   isQuizCompleted: (lessonId: number) => boolean;
+  hasLessonProgress: (lessonId: number) => boolean;
   getCompletedCount: () => number;
   getProgressPercentage: () => number;
   refreshProgress: () => Promise<void>;
@@ -108,16 +108,6 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     }
   }, [effectiveUserId]);
 
-  const markLessonComplete = async (lessonId: number) => {
-    if (!user) return;
-    try {
-      await api('/progress', { method: 'PUT', body: { lessonId, completed: true } });
-      await fetchProgress(user.id, true);
-    } catch (e) {
-      console.error('[Progress] markLessonComplete error:', e);
-    }
-  };
-
   const markQuizComplete = async (lessonId: number) => {
     if (!user) {
       console.error('markQuizComplete: No user logged in');
@@ -133,15 +123,19 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   };
 
   const isLessonCompleted = (lessonId: number) => {
-    return progress.find(p => p.lessonId === lessonId)?.completed ?? false;
+    return progress.find(p => p.lessonId === lessonId)?.quizCompleted ?? false;
   };
 
   const isQuizCompleted = (lessonId: number) => {
     return progress.find(p => p.lessonId === lessonId)?.quizCompleted ?? false;
   };
 
+  const hasLessonProgress = (lessonId: number) => {
+    return progress.some(p => p.lessonId === lessonId);
+  };
+
   const getCompletedCount = () => {
-    return progress.filter(p => p.completed).length;
+    return progress.filter(p => p.quizCompleted).length;
   };
 
   const getProgressPercentage = () => {
@@ -152,10 +146,10 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     <ProgressContext.Provider value={{
       progress,
       isLoading,
-      markLessonComplete,
       markQuizComplete,
       isLessonCompleted,
       isQuizCompleted,
+      hasLessonProgress,
       getCompletedCount,
       getProgressPercentage,
       refreshProgress,
