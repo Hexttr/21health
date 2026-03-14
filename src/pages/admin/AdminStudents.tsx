@@ -70,6 +70,7 @@ export default function AdminStudents() {
 
   const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<StudentProgress | null>(null);
 
   useEffect(() => {
     loadStudents();
@@ -187,16 +188,16 @@ export default function AdminStudents() {
     }
   };
 
-  const handleDeleteStudent = async (student: StudentProgress) => {
-    const confirmed = confirm(`Удалить пользователя "${student.name}" (${student.email})? Это действие необратимо.`);
-    if (!confirmed) {
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) {
       return;
     }
 
-    setDeletingStudentId(student.user_id);
+    setDeletingStudentId(studentToDelete.user_id);
     try {
-      await api(`/admin/users/${student.user_id}`, { method: 'DELETE' });
+      await api(`/admin/users/${studentToDelete.user_id}`, { method: 'DELETE' });
       toast.success('Пользователь удалён');
+      setStudentToDelete(null);
       loadStudents();
     } catch (error) {
       console.error('Error deleting student:', error);
@@ -425,7 +426,7 @@ export default function AdminStudents() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDeleteStudent(student)}
+                    onClick={() => setStudentToDelete(student)}
                     disabled={deletingStudentId === student.user_id}
                     title="Удалить пользователя"
                     className="w-8 h-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -511,6 +512,40 @@ export default function AdminStudents() {
             <Button onClick={handleSaveName} disabled={isSavingName} className="rounded-xl">
               {isSavingName ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(studentToDelete)} onOpenChange={(open) => !open && setStudentToDelete(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Удалить пользователя?</DialogTitle>
+            <DialogDescription>
+              {studentToDelete
+                ? `Пользователь "${studentToDelete.name}" (${studentToDelete.email}) будет удален без возможности восстановления.`
+                : 'Подтвердите удаление пользователя.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStudentToDelete(null)}
+              className="rounded-xl"
+              disabled={Boolean(studentToDelete && deletingStudentId === studentToDelete.user_id)}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={handleDeleteStudent}
+              variant="destructive"
+              className="rounded-xl"
+              disabled={Boolean(studentToDelete && deletingStudentId === studentToDelete.user_id)}
+            >
+              {Boolean(studentToDelete && deletingStudentId === studentToDelete.user_id) ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Удалить
             </Button>
           </DialogFooter>
         </DialogContent>

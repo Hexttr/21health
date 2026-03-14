@@ -5,6 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { AdminPageLayout } from '@/components/AdminPageLayout';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   Loader2, 
   Plus, 
@@ -32,6 +40,7 @@ export default function AdminCodes() {
   const [newComment, setNewComment] = useState('');
   const [savingCode, setSavingCode] = useState(false);
   const [deletingCodeId, setDeletingCodeId] = useState<string | null>(null);
+  const [codeToDelete, setCodeToDelete] = useState<InvitationCode | null>(null);
 
   useEffect(() => {
     loadInvitationCodes();
@@ -89,16 +98,16 @@ export default function AdminCodes() {
     toast.success('Код скопирован!');
   };
 
-  const deleteInvitationCode = async (code: InvitationCode) => {
-    const confirmed = confirm(`Удалить код "${code.code}"? Это действие необратимо.`);
-    if (!confirmed) {
+  const deleteInvitationCode = async () => {
+    if (!codeToDelete) {
       return;
     }
 
-    setDeletingCodeId(code.id);
+    setDeletingCodeId(codeToDelete.id);
     try {
-      await api(`/admin/codes/${code.id}`, { method: 'DELETE' });
+      await api(`/admin/codes/${codeToDelete.id}`, { method: 'DELETE' });
       toast.success('Код удалён');
+      setCodeToDelete(null);
       loadInvitationCodes();
     } catch (error) {
       console.error('Error deleting code:', error);
@@ -239,7 +248,7 @@ export default function AdminCodes() {
                       onCheckedChange={() => toggleCodeActive(code)}
                     />
                     <button
-                      onClick={() => deleteInvitationCode(code)}
+                      onClick={() => setCodeToDelete(code)}
                       disabled={deletingCodeId === code.id}
                       className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-60"
                       title="Удалить код"
@@ -257,6 +266,40 @@ export default function AdminCodes() {
           )}
         </div>
       </div>
+
+      <Dialog open={Boolean(codeToDelete)} onOpenChange={(open) => !open && setCodeToDelete(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Удалить пригласительный код?</DialogTitle>
+            <DialogDescription>
+              {codeToDelete
+                ? `Код "${codeToDelete.code}" будет удален без возможности восстановления.`
+                : 'Подтвердите удаление кода.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCodeToDelete(null)}
+              className="rounded-xl"
+              disabled={Boolean(codeToDelete && deletingCodeId === codeToDelete.id)}
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={deleteInvitationCode}
+              className="rounded-xl"
+              variant="destructive"
+              disabled={Boolean(codeToDelete && deletingCodeId === codeToDelete.id)}
+            >
+              {Boolean(codeToDelete && deletingCodeId === codeToDelete.id) ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Удалить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminPageLayout>
   );
 }
