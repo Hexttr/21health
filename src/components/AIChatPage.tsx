@@ -13,6 +13,7 @@ import { AIConversationList } from '@/components/AIConversationList';
 import { AIResponseContent } from '@/components/AIResponseContent';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getAIToolBadge, getAIToolByProvider, getAIToolByTitle } from '@/lib/ai-tools';
+import { showPersistentAiError } from '@/lib/ai-error-utils';
 import {
   deriveConversationTitle,
   loadConversationStore,
@@ -351,15 +352,15 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
         }),
       });
 
-      if (response.status === 429) { toast.error('Превышен лимит запросов. Попробуйте позже.'); setIsLoading(false); return; }
-      if (response.status === 402) { toast.error('Необходимо пополнить баланс.'); setIsLoading(false); return; }
-      if (response.status === 401) { toast.error('Войдите в аккаунт для использования чата'); setIsLoading(false); return; }
-      if (response.status === 404) { toast.error('Сервер не найден. Убедитесь, что backend запущен.'); setIsLoading(false); return; }
+      if (response.status === 429) { showPersistentAiError('Превышен лимит запросов. Попробуйте позже.'); setIsLoading(false); return; }
+      if (response.status === 402) { showPersistentAiError('Необходимо пополнить баланс.'); setIsLoading(false); return; }
+      if (response.status === 401) { showPersistentAiError('Войдите в аккаунт для использования чата'); setIsLoading(false); return; }
+      if (response.status === 404) { showPersistentAiError('Сервер не найден. Убедитесь, что backend запущен.'); setIsLoading(false); return; }
 
       if (!response.ok || !response.body) {
         const errData = await response.json().catch(() => ({}));
         const errMsg = typeof errData?.error === 'string' ? errData.error : errData?.error?.message || `Ошибка ${response.status}`;
-        toast.error(errMsg);
+        showPersistentAiError(errMsg);
         setIsLoading(false);
         return;
       }
@@ -424,13 +425,13 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
       }
 
       if (streamError) {
-        toast.error(streamError);
+        showPersistentAiError(streamError);
         setMessages(newMessages);
         return;
       }
 
       if (!assistantContent.trim()) {
-        toast.error('Модель не вернула текстовый ответ. Попробуйте другую модель или повторите запрос.');
+        showPersistentAiError('Модель не вернула текстовый ответ. Попробуйте другую модель или повторите запрос.');
         setMessages(newMessages);
         return;
       }
@@ -442,7 +443,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
         return;
       }
       console.error('AI chat error:', error);
-      toast.error('Ошибка при отправке сообщения');
+      showPersistentAiError('Ошибка при отправке сообщения');
       setMessages(newMessages);
     } finally {
       activeRequestRef.current = null;

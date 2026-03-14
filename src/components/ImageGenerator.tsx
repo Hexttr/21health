@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ModelSelector } from '@/components/ModelSelector';
 import { useBalance } from '@/contexts/BalanceContext';
 import { useChatContext } from '@/contexts/ChatContext';
+import { showPersistentAiError } from '@/lib/ai-error-utils';
 import { resizeImageForUpload, resizeForStorage } from '@/lib/imageUtils';
 import { putFullImage, getFullImage } from '@/lib/imageStore';
 import { ImageUploadPanel } from '@/components/ImageUploadPanel';
@@ -202,7 +203,7 @@ export function ImageGenerator() {
       }
     } catch (error) {
       console.error('Image generation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Ошибка генерации изображения');
+      showPersistentAiError(error, 'Ошибка генерации изображения');
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsLoading(false);

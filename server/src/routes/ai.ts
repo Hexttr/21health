@@ -4,6 +4,7 @@ import { checkBilling, calculateCost, deductBalance, getBalance, logUsage, getMa
 import { aiAttachmentConfig, buildAttachmentContext, resolveAttachmentsForUser } from '../lib/ai/attachments.js';
 import { getProviderApiKey, getGeminiKey } from '../lib/provider-keys.js';
 import { getProviderAdapter } from '../lib/ai/provider-registry.js';
+import { translateAiProviderErrorMessage } from '../lib/ai/error-messages.js';
 import { ensureModelSupports, resolveRuntimeModel } from '../lib/ai/runtime.js';
 import { AIChatMessage, AIResolvedModel, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
 
@@ -27,9 +28,10 @@ function parseErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   try {
     const parsed = JSON.parse(raw);
-    return parsed?.error?.message || parsed?.error || raw;
+    const extracted = parsed?.error?.message || parsed?.error || raw;
+    return translateAiProviderErrorMessage(String(extracted));
   } catch {
-    return raw;
+    return translateAiProviderErrorMessage(raw);
   }
 }
 

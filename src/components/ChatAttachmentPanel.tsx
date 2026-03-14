@@ -3,6 +3,7 @@ import { FileText, Loader2, Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { apiUpload } from '@/api/client';
+import { showPersistentAiError } from '@/lib/ai-error-utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const IMAGE_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
@@ -143,7 +144,7 @@ export function ChatAttachmentPanel({
         currentAttachments = [...currentAttachments, response.attachment];
         onAttachmentsChange(currentAttachments);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : `Не удалось загрузить ${file.name}`);
+        showPersistentAiError(error, `Не удалось загрузить ${file.name}`);
       } finally {
         setUploadingDocuments((prev) => prev.filter((item) => item !== file.name));
       }
