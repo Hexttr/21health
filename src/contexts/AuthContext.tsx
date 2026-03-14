@@ -26,6 +26,8 @@ interface AuthContextType {
   isSessionReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
+  completeSocialAuth: (ticket: string) => Promise<{ error: string | null }>;
+  exchangeVkIdCode: (params: { code: string; state: string; deviceId: string }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   validateAccessCode: (code: string) => Promise<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>;
@@ -38,6 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSessionReady, setIsSessionReady] = useState(false);
+
+  const applyAuthenticatedSession = (token: string, nextUser: AppUser) => {
+    setToken(token);
+    setUser(nextUser);
+    setIsAdmin(nextUser.role === 'admin');
+    setIsSessionReady(true);
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -66,10 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: { email, password },
       });
-      setToken(res.token);
-      setUser(res.user);
-      setIsAdmin(res.user.role === 'admin');
-      setIsSessionReady(true);
+      applyAuthenticatedSession(res.token, res.user);
       return { error: null };
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Ошибка входа' };
@@ -111,13 +117,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone: phone?.trim() || undefined,
         },
       });
-      setToken(res.token);
-      setUser(res.user);
-      setIsAdmin(res.user.role === 'admin');
-      setIsSessionReady(true);
+      applyAuthenticatedSession(res.token, res.user);
       return { error: null };
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Ошибка регистрации' };
+    }
+  };
+
+  const completeSocialAuth = async (ticket: string) => {
+    try {
+      const res = await api<{ token: string; user: AppUser }>(`/auth/social/complete?ticket=${encodeURIComponent(ticket)}`);
+      applyAuthenticatedSession(res.token, res.user);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Ошибка входа через соцсеть' };
+    }
+  };
+
+  const exchangeVkIdCode = async ({ code, state, deviceId }: { code: string; state: string; deviceId: string }) => {
+    try {
+      const res = await api<{ token: string; user: AppUser }>('/auth/social/vkid/exchange', {
+        method: 'POST',
+        body: { code, state, deviceId },
+      });
+      applyAuthenticatedSession(res.token, res.user);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Ошибка входа через VK ID' };
     }
   };
 
@@ -139,6 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSessionReady,
         signIn,
         signUp,
+        completeSocialAuth,
+        exchangeVkIdCode,
         signOut,
         isAuthenticated: !!user,
         validateAccessCode,
@@ -160,6 +188,8 @@ export function useAuth() {
       isSessionReady: false,
       signIn: async () => ({ error: 'Auth not ready' as string | null }),
       signUp: async () => ({ error: 'Auth not ready' as string | null }),
+      completeSocialAuth: async () => ({ error: 'Auth not ready' as string | null }),
+      exchangeVkIdCode: async () => ({ error: 'Auth not ready' as string | null }),
       signOut: async () => {},
       isAuthenticated: false,
       validateAccessCode: async () => ({ valid: false, error: 'Auth not ready' }),

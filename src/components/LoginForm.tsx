@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertCircle, Brain, Zap, Target, CalendarPlus } from 'lucide-react';
 import { TestimonialsSection } from './TestimonialsSection';
 import { WaitlistModal } from './WaitlistModal';
+import { VkIdOAuthWidget } from './VkIdOAuthWidget';
 import { useSearchParams } from 'react-router-dom';
 
 export function LoginForm() {
@@ -229,6 +230,7 @@ export function LoginForm() {
                           className="h-12 rounded-xl border-border/50 focus:border-primary bg-secondary/30"
                         />
                       </div>
+                      <VkIdOAuthWidget accessCode={accessCode} />
 
                       {error && (
                         <div className="flex items-start gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20">

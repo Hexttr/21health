@@ -33,6 +33,7 @@ const AdminTestimonials = React.lazy(() => import("./pages/admin/AdminTestimonia
 const TopUp = React.lazy(() => import("./pages/TopUp"));
 const CourseAccessPage = React.lazy(() => import("./pages/CourseAccessPage"));
 const ReferralProgramPage = React.lazy(() => import("./pages/ReferralProgramPage"));
+const SocialAuthCallbackPage = React.lazy(() => import("./pages/SocialAuthCallbackPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,6 +123,10 @@ const App = () => (
                         <Index />
                       </AppLayout>
                     }
+                  />
+                  <Route
+                    path="/auth/vkid/callback"
+                    element={<SocialAuthCallbackPage />}
                   />
                   <Route
                     path="/ai"

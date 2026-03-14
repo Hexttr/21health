@@ -5,6 +5,7 @@ import {
   boolean,
   timestamp,
   integer,
+  index,
   uniqueIndex,
   numeric,
   serial,
@@ -208,6 +209,26 @@ export const phoneVerifications = pgTable(
   (t) => [uniqueIndex('phone_verifications_user_purpose_idx').on(t.userId, t.purpose)]
 );
 
+export const oauthIdentities = pgTable(
+  'oauth_identities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider', { enum: ['vkid'] }).notNull(),
+    providerUserId: text('provider_user_id').notNull(),
+    providerEmail: text('provider_email'),
+    providerEmailVerified: boolean('provider_email_verified').notNull().default(false),
+    rawProfileJson: text('raw_profile_json'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('oauth_identities_provider_user_idx').on(t.provider, t.providerUserId),
+    uniqueIndex('oauth_identities_user_provider_idx').on(t.userId, t.provider),
+    index('oauth_identities_provider_email_idx').on(t.providerEmail),
+  ]
+);
+
 export const testimonials = pgTable('testimonials', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -349,6 +370,7 @@ export type ReferralCode = typeof referralCodes.$inferSelect;
 export type ReferralAttribution = typeof referralAttributions.$inferSelect;
 export type ReferralReward = typeof referralRewards.$inferSelect;
 export type PhoneVerification = typeof phoneVerifications.$inferSelect;
+export type OAuthIdentity = typeof oauthIdentities.$inferSelect;
 export type Testimonial = typeof testimonials.$inferSelect;
 export type AIProvider = typeof aiProviders.$inferSelect;
 export type ProviderSecret = typeof providerSecrets.$inferSelect;
