@@ -14,8 +14,7 @@ interface SignUpParams {
   email: string;
   password: string;
   name: string;
-  invitationCode?: string;
-  referralCode?: string;
+  accessCode?: string;
   phone?: string;
 }
 
@@ -29,7 +28,7 @@ interface AuthContextType {
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
-  validateInvitationCode: (code: string) => Promise<{ valid: boolean; codeId?: string; error?: string }>;
+  validateAccessCode: (code: string) => Promise<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,26 +76,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const validateInvitationCode = async (code: string) => {
+  const validateAccessCode = async (code: string) => {
     try {
-      const res = await api<{ valid: boolean; codeId?: string; error?: string }>('/auth/validate-code', {
+      const res = await api<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>('/auth/validate-code', {
         method: 'POST',
         body: { code },
       });
-      return res.valid ? { valid: true, codeId: res.codeId } : { valid: false, error: res.error };
+      return res.valid
+        ? { valid: true, codeId: res.codeId, codeType: res.codeType }
+        : { valid: false, error: res.error };
     } catch {
       return { valid: false, error: 'Ошибка проверки кода' };
     }
   };
 
-  const signUp = async ({ email, password, name, invitationCode = '', referralCode, phone }: SignUpParams) => {
-    const normalizedInvitationCode = invitationCode.trim().toUpperCase();
-    const normalizedReferralCode = referralCode?.trim().toUpperCase();
+  const signUp = async ({ email, password, name, accessCode = '', phone }: SignUpParams) => {
+    const normalizedAccessCode = accessCode.trim().toUpperCase();
 
-    if (normalizedInvitationCode) {
-      const codeValidation = await validateInvitationCode(normalizedInvitationCode);
+    if (normalizedAccessCode) {
+      const codeValidation = await validateAccessCode(normalizedAccessCode);
       if (!codeValidation.valid) {
-        return { error: codeValidation.error || 'Недействительный пригласительный код' };
+        return { error: codeValidation.error || 'Недействительный код' };
       }
     }
 
@@ -107,8 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email,
           password,
           name,
-          invitationCode: normalizedInvitationCode || undefined,
-          referralCode: normalizedReferralCode || undefined,
+          accessCode: normalizedAccessCode || undefined,
           phone: phone?.trim() || undefined,
         },
       });
@@ -142,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signOut,
         isAuthenticated: !!user,
-        validateInvitationCode,
+        validateAccessCode,
       }}
     >
       {children}
@@ -163,7 +162,7 @@ export function useAuth() {
       signUp: async () => ({ error: 'Auth not ready' as string | null }),
       signOut: async () => {},
       isAuthenticated: false,
-      validateInvitationCode: async () => ({ valid: false, error: 'Auth not ready' }),
+      validateAccessCode: async () => ({ valid: false, error: 'Auth not ready' }),
     } as AuthContextType;
   }
   return context;

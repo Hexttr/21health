@@ -326,6 +326,7 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
     setIsLoading(true);
 
     let assistantContent = '';
+    let streamError = '';
 
     try {
       const controller = new AbortController();
@@ -398,6 +399,11 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
 
           try {
             const parsed = JSON.parse(jsonStr);
+            if (typeof parsed.error === 'string' && parsed.error.trim()) {
+              streamError = parsed.error.trim();
+              streamDone = true;
+              break;
+            }
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) {
               assistantContent += content;
@@ -416,6 +422,19 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
         }
         if (streamDone) break;
       }
+
+      if (streamError) {
+        toast.error(streamError);
+        setMessages(newMessages);
+        return;
+      }
+
+      if (!assistantContent.trim()) {
+        toast.error('Модель не вернула текстовый ответ. Попробуйте другую модель или повторите запрос.');
+        setMessages(newMessages);
+        return;
+      }
+
       setTimeout(() => refreshBalance(), 500);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {

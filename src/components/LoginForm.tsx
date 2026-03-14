@@ -10,13 +10,13 @@ import { WaitlistModal } from './WaitlistModal';
 import { useSearchParams } from 'react-router-dom';
 
 export function LoginForm() {
-  const { signIn, signUp, validateInvitationCode } = useAuth();
+  const { signIn, signUp, validateAccessCode } = useAuth();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [invitationCode, setInvitationCode] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -24,6 +24,13 @@ export function LoginForm() {
   const [codeValid, setCodeValid] = useState<boolean | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const referralCode = useMemo(() => searchParams.get('ref')?.trim().toUpperCase() || '', [searchParams]);
+
+  React.useEffect(() => {
+    if (referralCode) {
+      setAccessCode(referralCode);
+      setCodeValid(true);
+    }
+  }, [referralCode]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,13 +46,13 @@ export function LoginForm() {
   };
 
   const handleCodeBlur = async () => {
-    if (!invitationCode.trim()) {
+    if (!accessCode.trim()) {
       setCodeValid(null);
       return;
     }
     
     setCodeValidating(true);
-    const result = await validateInvitationCode(invitationCode);
+    const result = await validateAccessCode(accessCode);
     setCodeValid(result.valid);
     if (!result.valid) {
       setError(result.error || 'Недействительный код');
@@ -66,9 +73,8 @@ export function LoginForm() {
       email,
       password,
       name,
+      accessCode,
       phone,
-      invitationCode,
-      referralCode,
     });
     
     if (error) {
@@ -252,21 +258,21 @@ export function LoginForm() {
                     <form onSubmit={handleSignUp} className="space-y-5">
                       {referralCode && (
                         <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground">
-                          Вы регистрируетесь по реферальной ссылке. Код приглашения: <span className="font-semibold text-primary">{referralCode}</span>
+                          Вы регистрируетесь по реферальной ссылке. Код уже подставлен в поле ниже: <span className="font-semibold text-primary">{referralCode}</span>
                         </div>
                       )}
                       <div className="space-y-2">
                         <Label htmlFor="invitation-code" className="text-sm font-medium">
-                          Пригласительный код
+                          Пригласительный или реферальный код
                         </Label>
                         <div className="relative">
                           <Input
                             id="invitation-code"
                             type="text"
                             placeholder="Например: X1D5378"
-                            value={invitationCode}
+                            value={accessCode}
                             onChange={(e) => {
-                              setInvitationCode(e.target.value.toUpperCase());
+                              setAccessCode(e.target.value.toUpperCase());
                               setCodeValid(null);
                             }}
                             onBlur={handleCodeBlur}
@@ -282,9 +288,6 @@ export function LoginForm() {
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">✓</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground leading-5">
-                          Код необязателен. Без кода вы войдете как <span className="font-semibold text-foreground">Пользователь ИИ</span>, с кодом получите доступ к полному курсу как <span className="font-semibold text-foreground">student</span>.
-                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="name-register" className="text-sm font-medium">

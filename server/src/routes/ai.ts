@@ -330,6 +330,7 @@ export async function aiRoutes(app: FastifyInstance) {
     const billing = await resolveBillingForModel(payload, model);
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
+    reply.hijack();
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     const { controller, cleanup } = createAbortController(req);
 

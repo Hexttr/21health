@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, userRoles, invitationCodes } from '../db/schema.js';
+import { users, userRoles, invitationCodes, referralCodes } from '../db/schema.js';
 import { hashPassword, verifyPassword, signToken, getAuthFromRequest } from '../lib/auth.js';
 import { createReferralAttribution, ensureReferralCode } from '../lib/referrals.js';
 import { normalizePhone } from '../lib/phone-verification.js';
@@ -16,21 +16,30 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(400).send({ valid: false, error: 'Код обязателен' });
     }
     const normalized = code.trim().toUpperCase();
-    const [row] = await db
+    const [invitationRow] = await db
       .select()
       .from(invitationCodes)
       .where(and(eq(invitationCodes.code, normalized), eq(invitationCodes.isActive, true)));
-    if (!row) {
-      return reply.send({ valid: false, error: 'Недействительный или неактивный код' });
+    if (invitationRow) {
+      return reply.send({ valid: true, codeId: invitationRow.id, codeType: 'invitation' as const });
     }
-    return reply.send({ valid: true, codeId: row.id });
+
+    const [referralRow] = await db
+      .select()
+      .from(referralCodes)
+      .where(and(eq(referralCodes.code, normalized), eq(referralCodes.isActive, true)));
+    if (referralRow) {
+      return reply.send({ valid: true, codeId: referralRow.id, codeType: 'referral' as const });
+    }
+
+    return reply.send({ valid: false, error: 'Недействительный или неактивный код' });
   });
 
   // Sign up
   app.post<{
-    Body: { email: string; password: string; name: string; invitationCode?: string; referralCode?: string; phone?: string };
+    Body: { email: string; password: string; name: string; accessCode?: string; invitationCode?: string; referralCode?: string; phone?: string };
   }>('/auth/signup', async (req, reply) => {
-    const { email, password, name, invitationCode, referralCode, phone } = req.body || {};
+    const { email, password, name, accessCode, invitationCode, referralCode, phone } = req.body || {};
     if (!email?.trim() || !password || !name?.trim()) {
       return reply.status(400).send({ error: 'Заполните все поля' });
     }
@@ -53,19 +62,39 @@ export async function authRoutes(app: FastifyInstance) {
 
     let codeRow: typeof invitationCodes.$inferSelect | undefined;
     let role: 'student' | 'ai_user' = 'ai_user';
+    let normalizedReferralCode: string | null = referralCode?.trim().toUpperCase() || null;
+    const normalizedInvitationCode = invitationCode?.trim().toUpperCase() || null;
+    const normalizedAccessCode = accessCode?.trim().toUpperCase() || null;
 
-    if (invitationCode?.trim()) {
-      const normalized = invitationCode.trim().toUpperCase();
+    if (!normalizedReferralCode && normalizedAccessCode) {
+      const [referralRow] = await db
+        .select()
+        .from(referralCodes)
+        .where(and(eq(referralCodes.code, normalizedAccessCode), eq(referralCodes.isActive, true)));
+      if (referralRow) {
+        normalizedReferralCode = normalizedAccessCode;
+      }
+    }
+
+    const invitationCandidate = normalizedInvitationCode || (
+      normalizedAccessCode && normalizedAccessCode !== normalizedReferralCode
+        ? normalizedAccessCode
+        : null
+    );
+
+    if (invitationCandidate) {
       [codeRow] = await db
         .select()
         .from(invitationCodes)
-        .where(and(eq(invitationCodes.code, normalized), eq(invitationCodes.isActive, true)));
+        .where(and(eq(invitationCodes.code, invitationCandidate), eq(invitationCodes.isActive, true)));
 
       if (!codeRow) {
-        return reply.status(400).send({ error: 'Недействительный пригласительный код' });
+        return reply.status(400).send({ error: 'Недействительный код доступа' });
       }
 
       role = 'student';
+    } else if (normalizedAccessCode && !normalizedReferralCode) {
+      return reply.status(400).send({ error: 'Недействительный код доступа' });
     }
 
     const passwordHash = await hashPassword(password);
@@ -84,8 +113,8 @@ export async function authRoutes(app: FastifyInstance) {
     }
     await db.insert(userRoles).values({ userId: newUser.id, role });
     await ensureReferralCode(newUser.id);
-    if (referralCode?.trim()) {
-      await createReferralAttribution({ referralCode, refereeUserId: newUser.id });
+    if (normalizedReferralCode) {
+      await createReferralAttribution({ referralCode: normalizedReferralCode, refereeUserId: newUser.id });
     }
     const token = signToken({
       userId: newUser.id,
