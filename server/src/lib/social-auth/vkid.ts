@@ -56,6 +56,8 @@ interface VkResolvedProfile {
   rawProfileJson: string;
 }
 
+export type VkSocialProvider = 'vkid' | 'mail_ru' | 'ok_ru';
+
 function getSiteUrl(): string {
   return (process.env.SITE_URL || DEFAULT_SITE_URL).replace(/\/+$/, '');
 }
@@ -85,6 +87,7 @@ function sha256Base64Url(value: string): string {
 export function buildVkStartRedirect(params: {
   accessCode?: string;
   mode?: 'login' | 'register';
+  provider?: VkSocialProvider;
 }): string {
   assertVkIdConfigured();
 
@@ -103,27 +106,11 @@ export function buildVkStartRedirect(params: {
     code_challenge_method: 'S256',
   });
 
+  if (params.provider) {
+    query.set('provider', params.provider);
+  }
+
   return `${VK_AUTHORIZE_URL}?${query.toString()}`;
-}
-
-export function createVkWidgetConfig(params: {
-  accessCode?: string;
-  mode?: 'login' | 'register';
-}) {
-  assertVkIdConfigured();
-
-  const pending = createPendingSocialAuth({
-    accessCode: params.accessCode,
-    mode: params.mode,
-  });
-
-  return {
-    app: Number(getVkClientId()),
-    redirectUrl: getVkRedirectUri(),
-    state: pending.state,
-    codeVerifier: pending.codeVerifier,
-    scope: 'email',
-  };
 }
 
 export function buildSocialCallbackSuccessRedirect(ticket: string): string {

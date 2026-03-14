@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { users, userRoles, studentProgress, lessonContent, practicalMaterials, invitationCodes } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
 import { hashPassword } from '../lib/auth.js';
+import { setUserRoleWithStudentBonus } from '../lib/student-role-bonus.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Admin: get all users (with progress and invitation code comment)
@@ -87,12 +88,12 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!userId || !role || !['admin', 'student', 'ai_user'].includes(role)) {
       return reply.status(400).send({ error: 'userId и role (admin|student|ai_user) обязательны' });
     }
-    const [existing] = await db.select().from(userRoles).where(eq(userRoles.userId, userId));
-    if (!existing) {
-      return reply.status(404).send({ error: 'Роль пользователя не найдена' });
+    try {
+      const result = await setUserRoleWithStudentBonus(userId, role);
+      return reply.send({ success: true, role: result.role, bonusAwardedTokens: result.bonusAwardedTokens });
+    } catch (error) {
+      return reply.status(400).send({ error: error instanceof Error ? error.message : 'Не удалось изменить роль пользователя' });
     }
-    await db.update(userRoles).set({ role }).where(eq(userRoles.id, existing.id));
-    return reply.send({ success: true, role });
   });
 
   // Admin: update user name

@@ -13,6 +13,7 @@ export async function getSetting(key: string): Promise<string | null> {
     key === 'analytics_active_user_daily_requests' ||
     key === 'referral_signup_bonus_tokens' ||
     key === 'referral_course_purchase_bonus_tokens' ||
+    key === 'ai_user_to_student_bonus_tokens' ||
     key === 'token_exchange_rate_rub_to_tokens' ||
     key === 'course_14_price_rub' ||
     key === 'course_21_price_rub' ||

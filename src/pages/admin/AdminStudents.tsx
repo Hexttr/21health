@@ -135,8 +135,15 @@ export default function AdminStudents() {
   const handleSetRole = async (userId: string, role: 'admin' | 'student' | 'ai_user') => {
     setChangingRoleFor(userId);
     try {
-      await api('/admin/set-role', { method: 'POST', body: { userId, role } });
-      toast.success('Роль изменена');
+      const response = await api<{ success: true; role: 'admin' | 'student' | 'ai_user'; bonusAwardedTokens?: number }>('/admin/set-role', {
+        method: 'POST',
+        body: { userId, role },
+      });
+      if (response.bonusAwardedTokens && response.bonusAwardedTokens > 0) {
+        toast.success(`Роль изменена, начислено ${response.bonusAwardedTokens} токенов`);
+      } else {
+        toast.success('Роль изменена');
+      }
       loadStudents();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Ошибка смены роли');

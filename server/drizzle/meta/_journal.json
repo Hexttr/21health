@@ -64,6 +64,13 @@
       "when": 1774100000000,
       "tag": "0008_vkid_oauth_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1774110000000,
+      "tag": "0009_student_bonus_setting",
+      "breakpoints": true
     }
   ]
 }

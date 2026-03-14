@@ -13,10 +13,8 @@ import {
 import {
   buildSocialCallbackErrorRedirect,
   buildSocialCallbackSuccessRedirect,
-  createVkWidgetConfig,
   buildVkStartRedirect,
   handleVkCallbackAndCreateTicket,
-  resolveVkExchange,
 } from '../lib/social-auth/vkid.js';
 import { consumeSocialCompletionTicket } from '../lib/social-auth/store.js';
 
@@ -62,34 +60,19 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get<{
-    Querystring: { mode?: 'login' | 'register'; accessCode?: string };
+    Querystring: { mode?: 'login' | 'register'; accessCode?: string; provider?: 'vkid' | 'mail_ru' | 'ok_ru' };
   }>('/auth/social/vkid/start', async (req, reply) => {
     try {
       const redirectUrl = buildVkStartRedirect({
         mode: req.query.mode === 'register' ? 'register' : 'login',
         accessCode: req.query.accessCode,
+        provider: req.query.provider,
       });
       return reply.redirect(redirectUrl);
     } catch (error) {
       return reply.redirect(buildSocialCallbackErrorRedirect(
         error instanceof Error ? error.message : 'Не удалось запустить вход через VK ID'
       ));
-    }
-  });
-
-  app.get<{
-    Querystring: { mode?: 'login' | 'register'; accessCode?: string };
-  }>('/auth/social/vkid/config', async (req, reply) => {
-    try {
-      const config = createVkWidgetConfig({
-        mode: req.query.mode === 'register' ? 'register' : 'login',
-        accessCode: req.query.accessCode,
-      });
-      return reply.send(config);
-    } catch (error) {
-      return reply.status(503).send({
-        error: error instanceof Error ? error.message : 'VK ID не настроен на сервере',
-      });
     }
   });
 
@@ -111,26 +94,6 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.redirect(buildSocialCallbackErrorRedirect(
         error instanceof Error ? error.message : 'Не удалось завершить вход через VK ID'
       ));
-    }
-  });
-
-  app.post<{
-    Body: {
-      code?: string;
-      state?: string;
-      deviceId?: string;
-      device_id?: string;
-      error?: string;
-      error_description?: string;
-    };
-  }>('/auth/social/vkid/exchange', async (req, reply) => {
-    try {
-      const auth = await resolveVkExchange(req.body || {});
-      return reply.send(auth);
-    } catch (error) {
-      return reply.status(400).send({
-        error: error instanceof Error ? error.message : 'Не удалось завершить вход через VK ID',
-      });
     }
   });
 

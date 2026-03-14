@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { courseAccess, courseOrders, courses, userRoles } from '../db/schema.js';
+import { setUserRoleWithStudentBonus } from './student-role-bonus.js';
 
 export interface EffectiveCourseAccess {
   role: 'admin' | 'student' | 'ai_user';
@@ -93,10 +94,7 @@ export async function syncUserRoleWithAccess(userId: string): Promise<'admin' | 
 
   const access = await getEffectiveCourseAccess(userId);
   const nextRole: 'student' | 'ai_user' = access.hasCourseAccess ? 'student' : 'ai_user';
-  const [roleRow] = await db.select().from(userRoles).where(eq(userRoles.userId, userId));
-  if (roleRow && roleRow.role !== nextRole) {
-    await db.update(userRoles).set({ role: nextRole }).where(eq(userRoles.id, roleRow.id));
-  }
+  await setUserRoleWithStudentBonus(userId, nextRole);
 
   return nextRole;
 }

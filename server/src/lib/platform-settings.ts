@@ -11,6 +11,7 @@ export const ALLOWED_PLATFORM_SETTINGS = [
   'analytics_active_user_daily_requests',
   'referral_signup_bonus_tokens',
   'referral_course_purchase_bonus_tokens',
+  'ai_user_to_student_bonus_tokens',
   'token_exchange_rate_rub_to_tokens',
   'course_14_price_rub',
   'course_21_price_rub',

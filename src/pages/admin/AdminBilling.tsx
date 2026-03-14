@@ -67,6 +67,7 @@ const SETTINGS_FIELDS = [
   { key: 'token_exchange_rate_rub_to_tokens', label: 'Курс токенов (сколько токенов за 1 ₽)', hint: 'Например, 10 означает что 50 ₽ отображаются как 500 Tokens', type: 'number' as const },
   { key: 'referral_signup_bonus_tokens', label: 'Бонус за регистрацию по реферальной ссылке (Tokens)', hint: 'Начисляется и пригласившему, и приглашенному после подтверждения телефона', type: 'number' as const },
   { key: 'referral_course_purchase_bonus_tokens', label: 'Бонус за покупку курса приглашенным (Tokens)', hint: 'Начисляется пригласившему после оплаты курса приглашенным пользователем', type: 'number' as const },
+  { key: 'ai_user_to_student_bonus_tokens', label: 'Бонус за первый переход из Пользователя ИИ в Студента (Токенов)', hint: 'Разово начисляется пользователю при первом переходе из роли ai_user в student', type: 'number' as const },
   { key: 'course_14_price_rub', label: 'Цена курса 14 дней (₽)', hint: 'Стоимость базового тарифа', type: 'number' as const },
   { key: 'course_21_price_rub', label: 'Цена курса 21 день (₽)', hint: 'Стоимость полного курса', type: 'number' as const },
   { key: 'course_21_upgrade_price_rub', label: 'Апгрейд с 14 до 21 дня (₽)', hint: 'Разница, которую пользователь платит при расширении доступа', type: 'number' as const },

@@ -27,6 +27,7 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   phone: text('phone').unique(),
   phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
+  studentBonusGrantedAt: timestamp('student_bonus_granted_at', { withTimezone: true }),
   invitationCodeId: uuid('invitation_code_id').references(() => invitationCodes.id),
   isBlocked: boolean('is_blocked').notNull().default(false),
   blockedAt: timestamp('blocked_at', { withTimezone: true }),

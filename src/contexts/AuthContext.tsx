@@ -27,7 +27,6 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
   completeSocialAuth: (ticket: string) => Promise<{ error: string | null }>;
-  exchangeVkIdCode: (params: { code: string; state: string; deviceId: string }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   validateAccessCode: (code: string) => Promise<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>;
@@ -134,19 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const exchangeVkIdCode = async ({ code, state, deviceId }: { code: string; state: string; deviceId: string }) => {
-    try {
-      const res = await api<{ token: string; user: AppUser }>('/auth/social/vkid/exchange', {
-        method: 'POST',
-        body: { code, state, deviceId },
-      });
-      applyAuthenticatedSession(res.token, res.user);
-      return { error: null };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Ошибка входа через VK ID' };
-    }
-  };
-
   const signOut = async () => {
     setToken(null);
     setUser(null);
@@ -166,7 +152,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         completeSocialAuth,
-        exchangeVkIdCode,
         signOut,
         isAuthenticated: !!user,
         validateAccessCode,
@@ -189,7 +174,6 @@ export function useAuth() {
       signIn: async () => ({ error: 'Auth not ready' as string | null }),
       signUp: async () => ({ error: 'Auth not ready' as string | null }),
       completeSocialAuth: async () => ({ error: 'Auth not ready' as string | null }),
-      exchangeVkIdCode: async () => ({ error: 'Auth not ready' as string | null }),
       signOut: async () => {},
       isAuthenticated: false,
       validateAccessCode: async () => ({ valid: false, error: 'Auth not ready' }),
