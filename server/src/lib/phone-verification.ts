@@ -2,6 +2,7 @@ import { createHash, randomInt } from 'crypto';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { phoneVerifications, users } from '../db/schema.js';
+import { sendSmsRuCode } from './sms-ru.js';
 
 const CODE_TTL_MS = 5 * 60 * 1000;
 const REQUEST_COOLDOWN_MS = 60 * 1000;
@@ -29,8 +30,7 @@ function generateCode(): string {
 }
 
 async function sendSmsCode(phone: string, code: string): Promise<void> {
-  // Provider will be plugged in later. Keep interface stable now.
-  console.log(`[SMS STUB] Send verification code ${code} to +${phone}`);
+  await sendSmsRuCode(phone, code);
 }
 
 export async function requestPhoneVerificationCode(userId: string, rawPhone: string, purpose: 'referral_unlock' | 'phone_change' = 'referral_unlock') {
