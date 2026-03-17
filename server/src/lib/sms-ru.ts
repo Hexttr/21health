@@ -15,6 +15,16 @@ interface SmsRuSendResponse {
 
 const SMS_RU_SEND_URL = 'https://sms.ru/sms/send';
 
+export class SmsRuError extends Error {
+  readonly isServiceError: boolean;
+
+  constructor(message: string, options?: { isServiceError?: boolean }) {
+    super(message);
+    this.name = 'SmsRuError';
+    this.isServiceError = options?.isServiceError ?? false;
+  }
+}
+
 function getSmsRuApiId(): string {
   const apiId = process.env.SMS_RU_API_ID?.trim();
   if (!apiId) {
@@ -59,16 +69,22 @@ function formatSmsRuError(statusCode?: number, statusText?: string): string {
   return `SMS.ru: ошибка отправки SMS${statusCode ? ` (${statusCode})` : ''}`;
 }
 
-export async function sendSmsRuCode(phone: string, code: string): Promise<void> {
+function buildSmsRuError(statusCode?: number, statusText?: string): SmsRuError {
+  const message = formatSmsRuError(statusCode, statusText);
+  const isServiceError = statusCode === 220 || statusCode === 500 || message.includes('Не удалось связаться');
+  return new SmsRuError(message, { isServiceError });
+}
+
+async function performSmsRuSend(params: { phone: string; code: string; includeSender: boolean }): Promise<void> {
   const body = new URLSearchParams({
     api_id: getSmsRuApiId(),
-    to: phone,
-    msg: buildVerificationMessage(code),
+    to: params.phone,
+    msg: buildVerificationMessage(params.code),
     json: '1',
   });
 
   const sender = getSmsRuSender();
-  if (sender) {
+  if (params.includeSender && sender) {
     body.set('from', sender);
   }
 
@@ -86,26 +102,40 @@ export async function sendSmsRuCode(phone: string, code: string): Promise<void> 
       body,
     });
   } catch {
-    throw new Error('Не удалось связаться с SMS.ru');
+    throw new SmsRuError('Не удалось связаться с SMS.ru', { isServiceError: true });
   }
 
   let payload: SmsRuSendResponse | null = null;
   try {
     payload = await response.json() as SmsRuSendResponse;
   } catch {
-    throw new Error('SMS.ru вернул некорректный ответ');
+    throw new SmsRuError('SMS.ru вернул некорректный ответ', { isServiceError: true });
   }
 
   if (!response.ok) {
-    throw new Error(formatSmsRuError(payload?.status_code, payload?.status_text));
+    throw buildSmsRuError(payload?.status_code, payload?.status_text);
   }
 
   if (payload.status !== 'OK' || payload.status_code !== 100) {
-    throw new Error(formatSmsRuError(payload.status_code, payload.status_text));
+    throw buildSmsRuError(payload.status_code, payload.status_text);
   }
 
-  const item = payload.sms?.[phone];
+  const item = payload.sms?.[params.phone];
   if (!item || item.status !== 'OK' || item.status_code !== 100) {
-    throw new Error(formatSmsRuError(item?.status_code, item?.status_text));
+    throw buildSmsRuError(item?.status_code, item?.status_text);
+  }
+}
+
+export async function sendSmsRuCode(phone: string, code: string): Promise<void> {
+  const hasSender = Boolean(getSmsRuSender());
+
+  try {
+    await performSmsRuSend({ phone, code, includeSender: hasSender });
+  } catch (error) {
+    if (!hasSender) {
+      throw error;
+    }
+
+    await performSmsRuSend({ phone, code, includeSender: false });
   }
 }

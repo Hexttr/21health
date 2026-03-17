@@ -12,6 +12,7 @@ import {
   requestPhoneVerificationCode,
   verifyPhoneCode,
 } from '../lib/phone-verification.js';
+import { SmsRuError } from '../lib/sms-ru.js';
 
 export async function referralsRoutes(app: FastifyInstance) {
   app.get('/referral/me', async (req, reply) => {
@@ -29,24 +30,36 @@ export async function referralsRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: { phone: string; purpose?: 'referral_unlock' | 'phone_change' } }>('/phone/request-code', async (req, reply) => {
-    const payload = getAuthFromRequest(req);
-    if (!payload) {
-      return reply.status(401).send({ error: 'Не авторизован' });
+    try {
+      const payload = getAuthFromRequest(req);
+      if (!payload) {
+        return reply.status(401).send({ error: 'Не авторизован' });
+      }
+
+      const purpose = req.body?.purpose ?? 'referral_unlock';
+      const normalizedPhone = normalizePhone(req.body?.phone || '');
+      const [phoneOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.phone, normalizedPhone));
+
+      if (phoneOwner && phoneOwner.id !== payload.userId) {
+        return reply.status(400).send({ error: 'Этот номер уже привязан к другому аккаунту' });
+      }
+
+      await requestPhoneVerificationCode(payload.userId, normalizedPhone, purpose);
+      return reply.send({ success: true });
+    } catch (error) {
+      if (error instanceof SmsRuError) {
+        return reply.status(error.isServiceError ? 503 : 400).send({ error: error.message });
+      }
+
+      if (error instanceof Error) {
+        return reply.status(400).send({ error: error.message });
+      }
+
+      return reply.status(500).send({ error: 'Не удалось отправить код подтверждения' });
     }
-
-    const purpose = req.body?.purpose ?? 'referral_unlock';
-    const normalizedPhone = normalizePhone(req.body?.phone || '');
-    const [phoneOwner] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.phone, normalizedPhone));
-
-    if (phoneOwner && phoneOwner.id !== payload.userId) {
-      return reply.status(400).send({ error: 'Этот номер уже привязан к другому аккаунту' });
-    }
-
-    await requestPhoneVerificationCode(payload.userId, normalizedPhone, purpose);
-    return reply.send({ success: true });
   });
 
   app.post<{ Body: { code: string; purpose?: 'referral_unlock' | 'phone_change' } }>('/phone/verify', async (req, reply) => {
