@@ -11,13 +11,27 @@ const MAX_REQUESTS_PER_WINDOW = 5;
 const MAX_ATTEMPTS = 5;
 
 export function normalizePhone(input: string): string {
-  const digits = input.replace(/\D/g, '');
+  const trimmed = input.trim();
+  let digits = trimmed.replace(/\D/g, '');
+
+  if (digits.startsWith('00') && digits.length > 4) {
+    digits = digits.slice(2);
+  }
+
   if (digits.length === 11 && digits.startsWith('8')) {
     return `7${digits.slice(1)}`;
   }
+
   if (digits.length === 11 && digits.startsWith('7')) {
     return digits;
   }
+
+  // Accept international numbers in E.164-like form after stripping separators.
+  // This allows signup and verification flows for non-RU users, e.g. +375...
+  if ((trimmed.startsWith('+') || /^\d+$/.test(trimmed)) && digits.length >= 7 && digits.length <= 15) {
+    return digits;
+  }
+
   throw new Error('Некорректный номер телефона');
 }
 
