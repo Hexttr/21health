@@ -45,6 +45,7 @@ interface StudentProgress {
   name: string;
   role: 'admin' | 'student' | 'ai_user';
   balance: number;
+  balanceTokens: number;
   completed_lessons: number;
   quiz_completed: number;
   invitation_code_comment: string | null;
@@ -90,17 +91,18 @@ export default function AdminStudents() {
     try {
       const data = await api<Array<{
         user_id: string; email: string; name: string; role: 'admin' | 'student' | 'ai_user';
-        balance: number;
+        balance: number; balanceTokens: number;
         completed_lessons: number; quiz_completed: number;
         invitation_code_comment: string | null; is_blocked: boolean;
       }>>('/admin/users');
       const studentData: StudentProgress[] = data.map((u) => ({
         user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'student',
         balance: u.balance ?? 0,
+        balanceTokens: u.balanceTokens ?? 0,
         completed_lessons: u.completed_lessons, quiz_completed: u.quiz_completed,
         invitation_code_comment: u.invitation_code_comment, is_blocked: u.is_blocked
       }));
-      const drafts = Object.fromEntries(studentData.map((student) => [student.user_id, String(student.balance)]));
+      const drafts = Object.fromEntries(studentData.map((student) => [student.user_id, String(student.balanceTokens)]));
       const streams = new Set(data.map(u => u.invitation_code_comment).filter(Boolean) as string[]);
       setAvailableStreams(Array.from(streams).sort());
       setStudents(studentData);
@@ -215,8 +217,8 @@ export default function AdminStudents() {
   };
 
   const handleBalanceInputChange = (userId: string, value: string) => {
-    if (/^\d*(?:[.,]\d{0,2})?$/.test(value) || value === '') {
-      setBalanceDrafts((current) => ({ ...current, [userId]: value.replace(',', '.') }));
+    if (/^\d*$/.test(value) || value === '') {
+      setBalanceDrafts((current) => ({ ...current, [userId]: value }));
     }
   };
 
@@ -227,27 +229,31 @@ export default function AdminStudents() {
       return;
     }
 
-    const parsedValue = Number(rawValue);
+    const parsedValue = Number.parseInt(rawValue, 10);
     if (!Number.isFinite(parsedValue) || parsedValue < 0) {
-      toast.error('Токены должны быть неотрицательным числом');
+      toast.error('Токены должны быть неотрицательным целым числом');
       return;
     }
 
-    const normalizedValue = Number(parsedValue.toFixed(2));
-    if (normalizedValue === student.balance) {
+    const normalizedValue = Math.round(parsedValue);
+    if (normalizedValue === student.balanceTokens) {
       return;
     }
 
     setSavingBalanceFor(student.user_id);
     try {
-      const response = await api<{ success: true; balance: number }>('/admin/users/set-balance', {
+      const response = await api<{ success: true; balance: number; balanceTokens: number }>('/admin/users/set-balance', {
         method: 'POST',
-        body: { userId: student.user_id, balance: normalizedValue },
+        body: { userId: student.user_id, balanceTokens: normalizedValue },
       });
       setStudents((current) =>
-        current.map((item) => item.user_id === student.user_id ? { ...item, balance: response.balance } : item)
+        current.map((item) => item.user_id === student.user_id ? {
+          ...item,
+          balance: response.balance,
+          balanceTokens: response.balanceTokens,
+        } : item)
       );
-      setBalanceDrafts((current) => ({ ...current, [student.user_id]: String(response.balance) }));
+      setBalanceDrafts((current) => ({ ...current, [student.user_id]: String(response.balanceTokens) }));
       toast.success('Баланс обновлен');
     } catch (error) {
       console.error('Error updating balance:', error);
@@ -417,9 +423,9 @@ export default function AdminStudents() {
                 <div className="flex items-center gap-2 sm:gap-1.5">
                   <span className="text-xs text-muted-foreground sm:hidden">Токены:</span>
                   <Input
-                    value={balanceDrafts[student.user_id] ?? String(student.balance)}
+                    value={balanceDrafts[student.user_id] ?? String(student.balanceTokens)}
                     onChange={(e) => handleBalanceInputChange(student.user_id, e.target.value)}
-                    inputMode="decimal"
+                    inputMode="numeric"
                     className="h-8 w-full sm:w-[132px] rounded-lg border-border/50 bg-secondary/30 text-xs font-medium"
                   />
                   <Button

@@ -6,6 +6,7 @@ import { getAuthFromRequest } from '../lib/auth.js';
 import { hashPassword } from '../lib/auth.js';
 import { setUserRoleWithStudentBonus } from '../lib/student-role-bonus.js';
 import { ensureBalanceRow, getBalance, setBalanceByAdmin } from '../lib/billing.js';
+import { getTokenRate, tokensToRub } from '../lib/referrals.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Admin: get all users (with progress and invitation code comment)
@@ -19,6 +20,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const allProgress = await db.select().from(studentProgress);
     const allCodes = await db.select().from(invitationCodes);
     await Promise.all(allUsers.map((user) => ensureBalanceRow(user.id)));
+    const tokenRate = await getTokenRate();
     const roleMap = Object.fromEntries(allRoles.map((r) => [r.userId, r.role]));
     const codeMap = Object.fromEntries(allCodes.map((c) => [c.id, c.comment]));
     const progressByUser = new Map<string, { completed: number; quiz: number }>();
@@ -41,6 +43,7 @@ export async function adminRoutes(app: FastifyInstance) {
         blocked_at: u.blockedAt,
         role: roleMap[u.id] || 'student',
         balance: balanceMap.get(u.id) ?? 0,
+        balanceTokens: Math.round((balanceMap.get(u.id) ?? 0) * tokenRate),
         completed_lessons: prog.completed,
         quiz_completed: prog.quiz,
         invitation_code_comment: u.invitationCodeId ? codeMap[u.invitationCodeId] || null : null,
@@ -49,15 +52,15 @@ export async function adminRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post<{ Body: { userId: string; balance: number } }>('/admin/users/set-balance', async (req, reply) => {
+  app.post<{ Body: { userId: string; balanceTokens: number } }>('/admin/users/set-balance', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') {
       return reply.status(403).send({ error: 'Требуются права администратора' });
     }
 
-    const { userId, balance } = req.body || {};
-    if (!userId || typeof balance !== 'number' || Number.isNaN(balance) || balance < 0) {
-      return reply.status(400).send({ error: 'userId и неотрицательный balance обязательны' });
+    const { userId, balanceTokens } = req.body || {};
+    if (!userId || typeof balanceTokens !== 'number' || Number.isNaN(balanceTokens) || balanceTokens < 0) {
+      return reply.status(400).send({ error: 'userId и неотрицательный balanceTokens обязательны' });
     }
 
     const [user] = await db.select().from(users).where(eq(users.id, userId));
@@ -65,8 +68,9 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Пользователь не найден' });
     }
 
-    const nextBalance = await setBalanceByAdmin(userId, balance, payload.userId);
-    return reply.send({ success: true, balance: nextBalance });
+    const normalizedTokens = Math.round(balanceTokens);
+    const nextBalance = await setBalanceByAdmin(userId, await tokensToRub(normalizedTokens), payload.userId);
+    return reply.send({ success: true, balance: nextBalance, balanceTokens: normalizedTokens });
   });
 
   // Admin: block user
