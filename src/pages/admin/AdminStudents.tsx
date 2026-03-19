@@ -44,6 +44,7 @@ interface StudentProgress {
   email: string;
   name: string;
   role: 'admin' | 'student' | 'ai_user';
+  balance: number;
   completed_lessons: number;
   quiz_completed: number;
   invitation_code_comment: string | null;
@@ -69,6 +70,8 @@ export default function AdminStudents() {
   const [isSavingName, setIsSavingName] = useState(false);
 
   const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
+  const [savingBalanceFor, setSavingBalanceFor] = useState<string | null>(null);
+  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>({});
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<StudentProgress | null>(null);
 
@@ -87,17 +90,21 @@ export default function AdminStudents() {
     try {
       const data = await api<Array<{
         user_id: string; email: string; name: string; role: 'admin' | 'student' | 'ai_user';
+        balance: number;
         completed_lessons: number; quiz_completed: number;
         invitation_code_comment: string | null; is_blocked: boolean;
       }>>('/admin/users');
       const studentData: StudentProgress[] = data.map((u) => ({
         user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'student',
+        balance: u.balance ?? 0,
         completed_lessons: u.completed_lessons, quiz_completed: u.quiz_completed,
         invitation_code_comment: u.invitation_code_comment, is_blocked: u.is_blocked
       }));
+      const drafts = Object.fromEntries(studentData.map((student) => [student.user_id, String(student.balance)]));
       const streams = new Set(data.map(u => u.invitation_code_comment).filter(Boolean) as string[]);
       setAvailableStreams(Array.from(streams).sort());
       setStudents(studentData);
+      setBalanceDrafts(drafts);
     } catch (error) {
       console.error('Error loading students:', error);
       toast.error('Ошибка загрузки списка студентов');
@@ -207,6 +214,49 @@ export default function AdminStudents() {
     }
   };
 
+  const handleBalanceInputChange = (userId: string, value: string) => {
+    if (/^\d*(?:[.,]\d{0,2})?$/.test(value) || value === '') {
+      setBalanceDrafts((current) => ({ ...current, [userId]: value.replace(',', '.') }));
+    }
+  };
+
+  const handleSaveBalance = async (student: StudentProgress) => {
+    const rawValue = (balanceDrafts[student.user_id] ?? '').trim();
+    if (!rawValue) {
+      toast.error('Введите количество токенов');
+      return;
+    }
+
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+      toast.error('Токены должны быть неотрицательным числом');
+      return;
+    }
+
+    const normalizedValue = Number(parsedValue.toFixed(2));
+    if (normalizedValue === student.balance) {
+      return;
+    }
+
+    setSavingBalanceFor(student.user_id);
+    try {
+      const response = await api<{ success: true; balance: number }>('/admin/users/set-balance', {
+        method: 'POST',
+        body: { userId: student.user_id, balance: normalizedValue },
+      });
+      setStudents((current) =>
+        current.map((item) => item.user_id === student.user_id ? { ...item, balance: response.balance } : item)
+      );
+      setBalanceDrafts((current) => ({ ...current, [student.user_id]: String(response.balance) }));
+      toast.success('Баланс обновлен');
+    } catch (error) {
+      console.error('Error updating balance:', error);
+      toast.error(error instanceof Error ? error.message : 'Ошибка обновления баланса');
+    } finally {
+      setSavingBalanceFor(null);
+    }
+  };
+
   const filteredStudents = (filterStream === 'all'
     ? students
     : filterStream === 'blocked'
@@ -301,10 +351,11 @@ export default function AdminStudents() {
         ) : (
           <>
             {/* Header row — скрыт на мобильных */}
-            <div className="hidden sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 sm:px-6 py-3 border-b border-border/50 bg-secondary/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="hidden sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto_auto] gap-4 px-5 sm:px-6 py-3 border-b border-border/50 bg-secondary/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div className="w-10" />
               <div>Студент</div>
               <div className="w-[160px]">Роль</div>
+              <div className="w-[180px]">Токены</div>
               <div className="text-center min-w-[100px]">Прогресс</div>
               <div className="w-[140px] text-right">Действия</div>
             </div>
@@ -312,7 +363,7 @@ export default function AdminStudents() {
             {filteredStudents.map((student, index) => (
               <div
                 key={student.user_id}
-                className={`flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto] sm:items-center gap-3 sm:gap-4 px-5 sm:px-6 py-4 hover:bg-secondary/20 transition-colors ${
+                className={`flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto_auto] sm:items-center gap-3 sm:gap-4 px-5 sm:px-6 py-4 hover:bg-secondary/20 transition-colors ${
                   student.is_blocked ? 'bg-destructive/3' : ''
                 }`}
               >
@@ -361,6 +412,30 @@ export default function AdminStudents() {
                       <SelectItem value="ai_user">Пользователь ИИ</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="flex items-center gap-2 sm:gap-1.5">
+                  <span className="text-xs text-muted-foreground sm:hidden">Токены:</span>
+                  <Input
+                    value={balanceDrafts[student.user_id] ?? String(student.balance)}
+                    onChange={(e) => handleBalanceInputChange(student.user_id, e.target.value)}
+                    inputMode="decimal"
+                    className="h-8 w-full sm:w-[132px] rounded-lg border-border/50 bg-secondary/30 text-xs font-medium"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleSaveBalance(student)}
+                    disabled={savingBalanceFor === student.user_id}
+                    title="Сохранить токены"
+                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-success hover:bg-success/10"
+                  >
+                    {savingBalanceFor === student.user_id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                  </Button>
                 </div>
 
                 {/* Progress stats */}

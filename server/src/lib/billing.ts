@@ -174,6 +174,38 @@ export async function creditBalance(userId: string, amount: number, type: 'topup
   return newBalance;
 }
 
+export async function setBalanceByAdmin(userId: string, nextBalance: number, adminUserId: string): Promise<number> {
+  await ensureBalanceRow(userId);
+
+  const normalizedBalance = Math.max(0, Number(nextBalance.toFixed(2)));
+
+  return db.transaction(async (tx) => {
+    const [currentRow] = await tx.select().from(userBalances).where(eq(userBalances.userId, userId));
+    const currentBalance = currentRow ? parseFloat(currentRow.balance) : 0;
+    const delta = Number((normalizedBalance - currentBalance).toFixed(2));
+
+    await tx
+      .update(userBalances)
+      .set({
+        balance: normalizedBalance.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(eq(userBalances.userId, userId));
+
+    if (delta !== 0) {
+      await tx.insert(balanceTransactions).values({
+        userId,
+        amount: delta.toFixed(2),
+        type: 'admin_adjustment',
+        description: `Корректировка баланса администратором ${adminUserId}`,
+        balanceAfter: normalizedBalance.toFixed(2),
+      });
+    }
+
+    return normalizedBalance;
+  });
+}
+
 export async function logUsage(
   userId: string,
   modelId: string | null,

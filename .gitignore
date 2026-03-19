@@ -31,3 +31,8 @@ server/uploads/
 # Data package (videos, PDFs, previews) — не коммитить
 data-package.zip
 server/migration_export/
+
+# Local dev helpers and secrets
+check_lessons.py
+login.json
+server/scripts/check-lessons.js

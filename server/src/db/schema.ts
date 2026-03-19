@@ -313,7 +313,7 @@ export const balanceTransactions = pgTable('balance_transactions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  type: text('type', { enum: ['topup', 'ai_usage', 'bonus', 'refund'] }).notNull(),
+  type: text('type', { enum: ['topup', 'ai_usage', 'bonus', 'refund', 'admin_adjustment'] }).notNull(),
   description: text('description'),
   referenceId: text('reference_id'),
   balanceAfter: numeric('balance_after', { precision: 12, scale: 2 }).notNull(),

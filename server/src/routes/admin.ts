@@ -5,6 +5,7 @@ import { users, userRoles, studentProgress, lessonContent, practicalMaterials, i
 import { getAuthFromRequest } from '../lib/auth.js';
 import { hashPassword } from '../lib/auth.js';
 import { setUserRoleWithStudentBonus } from '../lib/student-role-bonus.js';
+import { ensureBalanceRow, getBalance, setBalanceByAdmin } from '../lib/billing.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Admin: get all users (with progress and invitation code comment)
@@ -17,9 +18,12 @@ export async function adminRoutes(app: FastifyInstance) {
     const allRoles = await db.select().from(userRoles);
     const allProgress = await db.select().from(studentProgress);
     const allCodes = await db.select().from(invitationCodes);
+    await Promise.all(allUsers.map((user) => ensureBalanceRow(user.id)));
     const roleMap = Object.fromEntries(allRoles.map((r) => [r.userId, r.role]));
     const codeMap = Object.fromEntries(allCodes.map((c) => [c.id, c.comment]));
     const progressByUser = new Map<string, { completed: number; quiz: number }>();
+    const balances = await Promise.all(allUsers.map(async (user) => [user.id, await getBalance(user.id)] as const));
+    const balanceMap = new Map<string, number>(balances);
     for (const p of allProgress) {
       const cur = progressByUser.get(p.userId) || { completed: 0, quiz: 0 };
       if (p.completed) cur.completed++;
@@ -36,12 +40,33 @@ export async function adminRoutes(app: FastifyInstance) {
         is_blocked: u.isBlocked,
         blocked_at: u.blockedAt,
         role: roleMap[u.id] || 'student',
+        balance: balanceMap.get(u.id) ?? 0,
         completed_lessons: prog.completed,
         quiz_completed: prog.quiz,
         invitation_code_comment: u.invitationCodeId ? codeMap[u.invitationCodeId] || null : null,
       };
     });
     return reply.send(result);
+  });
+
+  app.post<{ Body: { userId: string; balance: number } }>('/admin/users/set-balance', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') {
+      return reply.status(403).send({ error: 'Требуются права администратора' });
+    }
+
+    const { userId, balance } = req.body || {};
+    if (!userId || typeof balance !== 'number' || Number.isNaN(balance) || balance < 0) {
+      return reply.status(400).send({ error: 'userId и неотрицательный balance обязательны' });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user) {
+      return reply.status(404).send({ error: 'Пользователь не найден' });
+    }
+
+    const nextBalance = await setBalanceByAdmin(userId, balance, payload.userId);
+    return reply.send({ success: true, balance: nextBalance });
   });
 
   // Admin: block user
