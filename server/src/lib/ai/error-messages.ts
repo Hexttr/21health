@@ -45,7 +45,10 @@ export function translateAiProviderErrorMessage(message: string): string {
   if (
     lower.includes('model_not_found') ||
     lower.includes('does not exist') ||
-    lower.includes('not found')
+    lower.includes('not found') ||
+    lower.includes('unsupported model') ||
+    lower.includes('model is not supported') ||
+    lower.includes('unsupported_value')
   ) {
     return 'Выбранная AI-модель сейчас недоступна у провайдера.';
   }
@@ -57,6 +60,36 @@ export function translateAiProviderErrorMessage(message: string): string {
     lower.includes('try again later')
   ) {
     return 'AI-провайдер сейчас временно недоступен или перегружен. Попробуйте немного позже.';
+  }
+
+  if (
+    lower.includes('context length') ||
+    lower.includes('maximum context length') ||
+    lower.includes('prompt is too long') ||
+    lower.includes('too many tokens')
+  ) {
+    return 'Запрос получился слишком большим для выбранной модели. Сократите сообщение или вложения и попробуйте снова.';
+  }
+
+  if (
+    lower.includes('unsupported parameter') ||
+    lower.includes('invalid_request_error') ||
+    lower.includes('bad request')
+  ) {
+    return 'AI-провайдер отклонил параметры запроса. Попробуйте еще раз или выберите другую модель.';
+  }
+
+  if (
+    lower.includes('reasoning') ||
+    lower.includes('thinking') ||
+    lower.includes('not available') ||
+    lower.includes('unavailable')
+  ) {
+    return 'Выбранная AI-модель сейчас недоступна у провайдера.';
+  }
+
+  if (!/[а-яё]/i.test(trimmed) && /[a-z]/i.test(trimmed)) {
+    return 'AI-провайдер вернул ошибку. Попробуйте еще раз или выберите другую модель.';
   }
 
   return trimmed;

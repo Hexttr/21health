@@ -128,12 +128,13 @@ export function calculateCost(
 export async function deductBalance(userId: string, amount: number, description: string, referenceId?: string): Promise<number | null> {
   const costStr = amount.toFixed(2);
 
-  const [updated] = await db.execute(sql`
+  const result = await db.execute(sql`
     UPDATE user_balances
     SET balance = balance - ${costStr}::numeric, updated_at = now()
     WHERE user_id = ${userId} AND balance >= ${costStr}::numeric
     RETURNING balance::text as balance
-  `) as unknown as Array<{ balance: string }>;
+  `);
+  const updated = result.rows[0] as { balance: string } | undefined;
 
   if (!updated) return null;
 
@@ -154,12 +155,17 @@ export async function creditBalance(userId: string, amount: number, type: 'topup
   await ensureBalanceRow(userId);
   const amtStr = amount.toFixed(2);
 
-  const [updated] = await db.execute(sql`
+  const result = await db.execute(sql`
     UPDATE user_balances
     SET balance = balance + ${amtStr}::numeric, updated_at = now()
     WHERE user_id = ${userId}
     RETURNING balance::text as balance
-  `) as unknown as Array<{ balance: string }>;
+  `);
+  const updated = result.rows[0] as { balance: string } | undefined;
+
+  if (!updated) {
+    throw new Error('Не удалось обновить баланс пользователя');
+  }
 
   const newBalance = parseFloat(updated.balance);
   await db.insert(balanceTransactions).values({

@@ -426,7 +426,9 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
 
       if (streamError) {
         showPersistentAiError(streamError);
-        setMessages(newMessages);
+        if (!assistantContent.trim()) {
+          setMessages(newMessages);
+        }
         return;
       }
 

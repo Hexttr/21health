@@ -350,14 +350,18 @@ export async function aiRoutes(app: FastifyInstance) {
 
       if (controller.signal.aborted) return;
 
-      await finalizeUsageBilling({
-        payload,
-        model,
-        billing,
-        requestType: 'chat',
-        usage: result.usage,
-        description: `Chat: ${result.usage.inputTokens}+${result.usage.outputTokens} tokens`,
-      });
+      try {
+        await finalizeUsageBilling({
+          payload,
+          model,
+          billing,
+          requestType: 'chat',
+          usage: result.usage,
+          description: `Chat: ${result.usage.inputTokens}+${result.usage.outputTokens} tokens`,
+        });
+      } catch (error) {
+        req.log.error({ err: error, userId: payload.userId, modelId: model.id }, 'Failed to finalize chat billing after stream generation');
+      }
 
       reply.raw.write('data: [DONE]\n\n');
     } catch (error) {

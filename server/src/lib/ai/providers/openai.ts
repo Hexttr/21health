@@ -26,6 +26,28 @@ function parseOpenAIError(raw: string): string {
   }
 }
 
+function extractOpenAIText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (!part || typeof part !== 'object') return '';
+      const value = part as { text?: string; type?: string };
+      if (typeof value.text === 'string' && (value.type === 'text' || value.type === 'output_text' || !value.type)) {
+        return value.text;
+      }
+      return '';
+    })
+    .join('');
+}
+
 function toOpenAIContent(message: StreamChatParams['messages'][number]) {
   if (!message.images?.length) {
     return message.content;
@@ -65,11 +87,11 @@ export class OpenAIAdapter implements AIProviderAdapter {
     }
 
     const data = await response.json() as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
 
-    const text = data.choices?.[0]?.message?.content || '';
+    const text = extractOpenAIText(data.choices?.[0]?.message?.content);
     if (text) {
       params.onDelta(text);
     }
