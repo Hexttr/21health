@@ -54,9 +54,6 @@ export async function lessonRoutes(app: FastifyInstance) {
     if (!payload) {
       return reply.status(401).send({ error: 'Не авторизован' });
     }
-    if (payload.role === 'ai_user') {
-      return reply.status(403).send({ error: 'Доступ к урокам недоступен для этого типа аккаунта' });
-    }
     const lessonId = parseInt(req.params.lessonId, 10);
     if (isNaN(lessonId)) {
       return reply.status(400).send({ error: 'Некорректный ID урока' });
