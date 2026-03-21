@@ -133,7 +133,7 @@ function buildChatProfile(model: AIResolvedModel, taskMode: Exclude<AITaskMode, 
   return buildGenerationProfile({
     model,
     taskMode,
-    systemPrompt: buildChatSystemPrompt(taskMode),
+    systemPrompt: buildChatSystemPrompt(taskMode, model.providerName),
   });
 }
 

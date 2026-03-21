@@ -96,6 +96,63 @@ function getExtension(filename: string): string {
   return extname(filename || '').toLowerCase();
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (bytes >= 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${bytes} B`;
+}
+
+function describeAttachmentKind(attachment: typeof aiAttachments.$inferSelect): string {
+  const extension = getExtension(attachment.originalName);
+  switch (extension) {
+    case '.pdf':
+      return 'PDF-документ';
+    case '.docx':
+      return 'DOCX-документ';
+    case '.xls':
+    case '.xlsx':
+    case '.csv':
+      return 'Таблица';
+    case '.pptx':
+      return 'Презентация';
+    case '.md':
+      return 'Markdown-документ';
+    case '.json':
+      return 'JSON-файл';
+    case '.txt':
+      return 'Текстовый файл';
+    default:
+      return attachment.mimeType || 'Документ';
+  }
+}
+
+function buildAttachmentSummaryLine(attachment: typeof aiAttachments.$inferSelect, index: number): string {
+  const details = [
+    describeAttachmentKind(attachment),
+    formatFileSize(attachment.fileSize),
+    attachment.pageCount ? `${attachment.pageCount} стр.` : null,
+    attachment.sheetCount ? `${attachment.sheetCount} лист.` : null,
+    attachment.slideCount ? `${attachment.slideCount} слайд.` : null,
+  ].filter(Boolean).join(' | ');
+
+  return `${index + 1}. ${attachment.originalName}${details ? ` — ${details}` : ''}`;
+}
+
+function sliceAttachmentExcerpt(text: string, maxChars: number): string {
+  const normalized = normalizeText(text);
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  const boundary = normalized.lastIndexOf('\n', Math.min(maxChars, normalized.length));
+  const safeEnd = boundary > maxChars * 0.6 ? boundary : maxChars;
+  return `${normalized.slice(0, safeEnd).trim()}\n\n[Фрагмент документа обрезан для экономии контекста]`;
+}
+
 function validateDocument(filename: string, mimeType: string, fileSize: number): void {
   const extension = getExtension(filename);
   if (!SUPPORTED_DOCUMENT_EXTENSIONS.has(extension)) {
@@ -392,26 +449,51 @@ export function buildAttachmentContext(
   attachments: Array<typeof aiAttachments.$inferSelect>,
   maxChars = 40_000,
 ): string {
-  const blocks: string[] = [];
-  let remaining = maxChars;
+  if (attachments.length === 0 || maxChars <= 0) {
+    return '';
+  }
 
-  for (const attachment of attachments) {
+  const blocks: string[] = [];
+  const summaryLines = attachments.map((attachment, index) => buildAttachmentSummaryLine(attachment, index));
+  const summaryBlock = ['[Набор документов]', `Всего документов: ${attachments.length}`, ...summaryLines].join('\n');
+  blocks.push(summaryBlock);
+
+  let remaining = Math.max(0, maxChars - summaryBlock.length - 4);
+  const remainingAttachments = attachments.filter((attachment) => Boolean(attachment.extractedText));
+
+  for (const [index, attachment] of remainingAttachments.entries()) {
     if (!attachment.extractedText || remaining <= 0) break;
 
-    const header = [
-      `Документ: ${attachment.originalName}`,
-      `Тип: ${attachment.mimeType}`,
-      attachment.pageCount ? `Страниц: ${attachment.pageCount}` : null,
-      attachment.sheetCount ? `Листов: ${attachment.sheetCount}` : null,
-      attachment.slideCount ? `Слайдов: ${attachment.slideCount}` : null,
-    ].filter(Boolean).join(' | ');
+    const attachmentsLeft = remainingAttachments.length - index;
+    const perAttachmentBudget = Math.max(1200, Math.floor(remaining / attachmentsLeft));
+    const metaLines = [
+      `[Документ ${index + 1}]`,
+      `Название: ${attachment.originalName}`,
+      `Формат: ${describeAttachmentKind(attachment)}`,
+      `MIME: ${attachment.mimeType}`,
+      `Размер: ${formatFileSize(attachment.fileSize)}`,
+      attachment.pageCount ? `Страницы: ${attachment.pageCount}` : null,
+      attachment.sheetCount ? `Листы: ${attachment.sheetCount}` : null,
+      attachment.slideCount ? `Слайды: ${attachment.slideCount}` : null,
+    ].filter(Boolean);
+    const header = metaLines.join('\n');
 
-    const budgetForText = Math.max(0, remaining - header.length - 32);
+    const budgetForText = Math.max(0, perAttachmentBudget - header.length - 64);
     if (budgetForText <= 0) break;
 
-    const excerpt = attachment.extractedText.slice(0, budgetForText);
-    blocks.push(`[Вложение]\n${header}\n${excerpt}`);
-    remaining -= header.length + excerpt.length + 32;
+    const preview = attachment.extractedPreview
+      ? sliceAttachmentExcerpt(attachment.extractedPreview, Math.min(800, Math.max(250, Math.floor(budgetForText * 0.25))))
+      : '';
+    const bodyBudget = Math.max(0, budgetForText - preview.length - (preview ? 32 : 0));
+    const excerpt = sliceAttachmentExcerpt(attachment.extractedText, bodyBudget);
+    const parts = [header];
+    if (preview) {
+      parts.push(`Краткий фрагмент:\n${preview}`);
+    }
+    parts.push(`Извлечённое содержимое:\n${excerpt}`);
+    const block = parts.join('\n\n');
+    blocks.push(block);
+    remaining -= block.length + 4;
   }
 
   return blocks.join('\n\n');
