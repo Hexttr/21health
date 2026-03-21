@@ -42,7 +42,11 @@ export function loadConversationStore(modelName: string): ConversationStore {
 }
 
 export function saveConversationStore(modelName: string, store: ConversationStore): void {
-  localStorage.setItem(getStorageKey(modelName), JSON.stringify(store));
+  try {
+    localStorage.setItem(getStorageKey(modelName), JSON.stringify(store));
+  } catch (error) {
+    console.warn(`Failed to persist AI conversation history for ${modelName}:`, error);
+  }
 }
 
 export function deriveConversationTitle(messages: ChatMessageRecord[]): string {

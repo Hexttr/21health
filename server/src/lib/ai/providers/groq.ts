@@ -57,39 +57,62 @@ export class GroqAdapter implements AIProviderAdapter {
     let buffer = '';
     let inputTokens = 0;
     let outputTokens = 0;
+    const processBufferedLines = (flushFinal = false) => {
+      const lines: string[] = [];
+
+      while (true) {
+        const newlineIndex = buffer.indexOf('\n');
+        if (newlineIndex === -1) break;
+        lines.push(buffer.slice(0, newlineIndex));
+        buffer = buffer.slice(newlineIndex + 1);
+      }
+
+      if (flushFinal && buffer.trim()) {
+        lines.push(buffer);
+        buffer = '';
+      }
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+            usage?: { prompt_tokens?: number; completion_tokens?: number };
+          };
+
+          const text = parsed.choices?.[0]?.delta?.content;
+          if (text) {
+            params.onDelta(text);
+          }
+
+          if (parsed.usage) {
+            inputTokens = parsed.usage.prompt_tokens || inputTokens;
+            outputTokens = parsed.usage.completion_tokens || outputTokens;
+          }
+        } catch {
+          if (!flushFinal) {
+            buffer = `${rawLine}\n${buffer}`;
+          }
+          break;
+        }
+      }
+    };
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr) as {
-              choices?: Array<{ delta?: { content?: string } }>;
-              usage?: { prompt_tokens?: number; completion_tokens?: number };
-            };
-
-            const text = parsed.choices?.[0]?.delta?.content;
-            if (text) {
-              params.onDelta(text);
-            }
-
-            if (parsed.usage) {
-              inputTokens = parsed.usage.prompt_tokens || inputTokens;
-              outputTokens = parsed.usage.completion_tokens || outputTokens;
-            }
-          } catch {
-            // Ignore malformed chunks from upstream streaming.
-          }
+        if (done) {
+          buffer += decoder.decode();
+          processBufferedLines(true);
+          break;
         }
+
+        buffer += decoder.decode(value, { stream: true });
+        processBufferedLines();
       }
     } finally {
       reader.releaseLock();

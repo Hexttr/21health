@@ -88,29 +88,52 @@ export class GeminiAdapter implements AIProviderAdapter {
     const decoder = new TextDecoder();
     let buffer = '';
     let usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number } = {};
+    const processBufferedLines = (flushFinal = false) => {
+      const lines: string[] = [];
+
+      while (true) {
+        const newlineIndex = buffer.indexOf('\n');
+        if (newlineIndex === -1) break;
+        lines.push(buffer.slice(0, newlineIndex));
+        buffer = buffer.slice(newlineIndex + 1);
+      }
+
+      if (flushFinal && buffer.trim()) {
+        lines.push(buffer);
+        buffer = '';
+      }
+
+      for (const rawLine of lines) {
+        const line = rawLine.trimEnd();
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6);
+        if (jsonStr === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          usageMetadata = extractUsageMetadata(parsed);
+          const text = extractTextDelta(parsed);
+          if (text) params.onDelta(text);
+        } catch {
+          if (!flushFinal) {
+            buffer = `${rawLine}\n${buffer}`;
+          }
+          break;
+        }
+      }
+    };
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6);
-          if (jsonStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            usageMetadata = extractUsageMetadata(parsed);
-            const text = extractTextDelta(parsed);
-            if (text) params.onDelta(text);
-          } catch {
-            // Ignore malformed chunks from upstream streaming.
-          }
+        if (done) {
+          buffer += decoder.decode();
+          processBufferedLines(true);
+          break;
         }
+
+        buffer += decoder.decode(value, { stream: true });
+        processBufferedLines();
       }
     } finally {
       reader.releaseLock();

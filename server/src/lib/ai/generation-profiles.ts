@@ -8,15 +8,15 @@ type ProfileDefaults = {
 const BASE_DEFAULTS: Record<AITaskMode, ProfileDefaults> = {
   chat: {
     temperature: 0.3,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 6144,
   },
   document_analysis: {
     temperature: 0.2,
-    maxOutputTokens: 6144,
+    maxOutputTokens: 8192,
   },
   image_analysis: {
     temperature: 0.25,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 6144,
   },
   quiz: {
     temperature: 0.2,
@@ -26,26 +26,26 @@ const BASE_DEFAULTS: Record<AITaskMode, ProfileDefaults> = {
 
 const PROVIDER_OVERRIDES: Record<string, Partial<Record<AITaskMode, ProfileDefaults>>> = {
   anthropic: {
-    chat: { temperature: 0.25, maxOutputTokens: 4096 },
-    document_analysis: { temperature: 0.15, maxOutputTokens: 6144 },
-    image_analysis: { temperature: 0.2, maxOutputTokens: 4096 },
+    chat: { temperature: 0.25, maxOutputTokens: 6144 },
+    document_analysis: { temperature: 0.15, maxOutputTokens: 8192 },
+    image_analysis: { temperature: 0.2, maxOutputTokens: 6144 },
     quiz: { temperature: 0.15, maxOutputTokens: 2048 },
   },
   gemini: {
-    chat: { temperature: 0.3, maxOutputTokens: 4096 },
-    document_analysis: { temperature: 0.2, maxOutputTokens: 6144 },
-    image_analysis: { temperature: 0.25, maxOutputTokens: 4096 },
+    chat: { temperature: 0.3, maxOutputTokens: 6144 },
+    document_analysis: { temperature: 0.2, maxOutputTokens: 8192 },
+    image_analysis: { temperature: 0.25, maxOutputTokens: 6144 },
     quiz: { temperature: 0.2, maxOutputTokens: 2048 },
   },
   groq: {
-    chat: { temperature: 0.25, maxOutputTokens: 4096 },
-    document_analysis: { temperature: 0.15, maxOutputTokens: 6144 },
-    image_analysis: { temperature: 0.2, maxOutputTokens: 4096 },
+    chat: { temperature: 0.25, maxOutputTokens: 6144 },
+    document_analysis: { temperature: 0.15, maxOutputTokens: 8192 },
+    image_analysis: { temperature: 0.2, maxOutputTokens: 6144 },
   },
   openai: {
-    chat: { maxOutputTokens: 4096 },
-    document_analysis: { maxOutputTokens: 6144 },
-    image_analysis: { maxOutputTokens: 4096 },
+    chat: { maxOutputTokens: 6144 },
+    document_analysis: { maxOutputTokens: 8192 },
+    image_analysis: { maxOutputTokens: 6144 },
     quiz: { maxOutputTokens: 2048 },
   },
 };

@@ -377,17 +377,23 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
       }]);
 
       let streamDone = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const processBufferedLines = (flushFinal = false) => {
+        const lines: string[] = [];
 
-        textBuffer += decoder.decode(value, { stream: true });
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
+        while (true) {
+          const newlineIndex = textBuffer.indexOf('\n');
+          if (newlineIndex === -1) break;
+          lines.push(textBuffer.slice(0, newlineIndex));
           textBuffer = textBuffer.slice(newlineIndex + 1);
+        }
 
+        if (flushFinal && textBuffer.trim()) {
+          lines.push(textBuffer);
+          textBuffer = '';
+        }
+
+        for (const rawLine of lines) {
+          let line = rawLine;
           if (line.endsWith('\r')) line = line.slice(0, -1);
           if (line.startsWith(':') || line.trim() === '') continue;
           if (!line.startsWith('data: ')) continue;
@@ -417,10 +423,24 @@ export function AIChatPage({ modelName, modelIcon, modelColor, providerName, sta
               });
             }
           } catch {
-            textBuffer = line + '\n' + textBuffer;
+            if (!flushFinal) {
+              textBuffer = line + '\n' + textBuffer;
+            }
             break;
           }
         }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          textBuffer += decoder.decode();
+          processBufferedLines(true);
+          break;
+        }
+
+        textBuffer += decoder.decode(value, { stream: true });
+        processBufferedLines();
         if (streamDone) break;
       }
 

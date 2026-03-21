@@ -127,48 +127,84 @@ export class AnthropicAdapter implements AIProviderAdapter {
     let buffer = '';
     let inputTokens = 0;
     let outputTokens = 0;
+    const processBufferedEvents = (flushFinal = false) => {
+      let separatorIndex: number;
+      while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        const block = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+
+        if (!block.trim()) continue;
+        const lines = block.split('\n');
+        const event = lines.find((line) => line.startsWith('event: '))?.slice(7).trim() || '';
+        const dataLines = lines
+          .filter((line) => line.startsWith('data: '))
+          .map((line) => line.slice(6))
+          .join('\n');
+
+        if (!dataLines || dataLines === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(dataLines) as Record<string, unknown>;
+          const usage = extractAnthropicUsage(parsed);
+          inputTokens = usage.inputTokens || inputTokens;
+          outputTokens = usage.outputTokens || outputTokens;
+
+          if (event === 'error') {
+            throw new Error(parseAnthropicError(dataLines));
+          }
+
+          const text = extractAnthropicStreamText(parsed);
+          if (text) {
+            params.onDelta(text);
+          }
+        } catch (error) {
+          if (error instanceof Error) {
+            throw error;
+          }
+        }
+      }
+
+      if (!flushFinal || !buffer.trim()) {
+        return;
+      }
+
+      const block = buffer.trim();
+      buffer = '';
+      const lines = block.split('\n');
+      const event = lines.find((line) => line.startsWith('event: '))?.slice(7).trim() || '';
+      const dataLines = lines
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => line.slice(6))
+        .join('\n');
+
+      if (!dataLines || dataLines === '[DONE]') return;
+
+      const parsed = JSON.parse(dataLines) as Record<string, unknown>;
+      const usage = extractAnthropicUsage(parsed);
+      inputTokens = usage.inputTokens || inputTokens;
+      outputTokens = usage.outputTokens || outputTokens;
+
+      if (event === 'error') {
+        throw new Error(parseAnthropicError(dataLines));
+      }
+
+      const text = extractAnthropicStreamText(parsed);
+      if (text) {
+        params.onDelta(text);
+      }
+    };
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let separatorIndex: number;
-        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
-          const block = buffer.slice(0, separatorIndex);
-          buffer = buffer.slice(separatorIndex + 2);
-
-          if (!block.trim()) continue;
-          const lines = block.split('\n');
-          const event = lines.find((line) => line.startsWith('event: '))?.slice(7).trim() || '';
-          const dataLines = lines
-            .filter((line) => line.startsWith('data: '))
-            .map((line) => line.slice(6))
-            .join('\n');
-
-          if (!dataLines || dataLines === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(dataLines) as Record<string, unknown>;
-            const usage = extractAnthropicUsage(parsed);
-            inputTokens = usage.inputTokens || inputTokens;
-            outputTokens = usage.outputTokens || outputTokens;
-
-            if (event === 'error') {
-              throw new Error(parseAnthropicError(dataLines));
-            }
-
-            const text = extractAnthropicStreamText(parsed);
-            if (text) {
-              params.onDelta(text);
-            }
-          } catch (error) {
-            if (error instanceof Error) {
-              throw error;
-            }
-          }
+        if (done) {
+          buffer += decoder.decode();
+          processBufferedEvents(true);
+          break;
         }
+
+        buffer += decoder.decode(value, { stream: true });
+        processBufferedEvents();
       }
     } finally {
       reader.releaseLock();
