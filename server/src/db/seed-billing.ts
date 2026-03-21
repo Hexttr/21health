@@ -260,7 +260,7 @@ async function seedBilling() {
       outputPricePer1k: '1.400',
       fixedPrice: '0',
       sortOrder: 32,
-      isActive: true,
+      isActive: false,
       providerName: 'openai',
     },
     {
