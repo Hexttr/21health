@@ -7,6 +7,7 @@ import {
   StreamChatParams,
   StreamChatResult,
 } from '../types.js';
+import { buildQuizFollowUpPrompt, buildQuizInitializationPrompt } from '../prompt-builder.js';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -68,10 +69,13 @@ export class GeminiAdapter implements AIProviderAdapter {
       signal: params.signal,
       body: JSON.stringify({
         systemInstruction: params.model.supportsSystemPrompt ? {
-          parts: [{ text: params.systemPrompt }],
+          parts: [{ text: params.profile.systemPrompt }],
         } : undefined,
         contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+        generationConfig: {
+          temperature: params.profile.temperature ?? 0.7,
+          maxOutputTokens: params.profile.maxOutputTokens ?? 8192,
+        },
       }),
     });
 
@@ -183,55 +187,20 @@ export class GeminiAdapter implements AIProviderAdapter {
 
   async runQuiz(params: RunQuizParams): Promise<RunQuizResult> {
     const isInitialization = params.conversationHistory.length === 0;
-    let systemPrompt: string;
-
-    if (isInitialization) {
-      systemPrompt = `Ты — AI-тьютор. Курс: AI для помогающих специалистов.
-
-## Урок: ${params.lessonTitle}
-${params.lessonDescription}
-Темы из видео: ${params.videoTopics.join(', ')}
-${params.customPrompt ? `\nДополнительные инструкции: ${params.customPrompt}` : ''}
-
-## ТВОЯ ЗАДАЧА:
-1. Создай 3-4 критерия для проверки понимания урока (по ключевым темам из видео)
-2. Поприветствуй студента и задай первый вопрос по критерию c1
-
-## ПРАВИЛА:
-- Критерии должны быть конкретными и проверяемыми
-- Вопросы должны быть открытыми (не да/нет)
-- Все критерии начинаются с passed: false
-- current_criterion: "c1"
-- all_passed: false`;
-    } else {
-      const currentCrit = params.learningState?.criteria?.find((criterion) => criterion.id === params.learningState?.current_criterion);
-      const currentTopic = currentCrit?.topic || 'текущая тема';
-      const currentDesc = currentCrit?.description || '';
-      const passedCriteria = params.learningState?.criteria?.filter((criterion) => criterion.passed) || [];
-      const remainingCriteria = params.learningState?.criteria?.filter((criterion) => !criterion.passed) || [];
-
-      systemPrompt = `Ты — AI-тьютор. Оцени последний ответ студента.
-
-## Урок: ${params.lessonTitle}
-${params.customPrompt ? `Инструкции: ${params.customPrompt}` : ''}
-
-## ТЕКУЩИЙ КРИТЕРИЙ: ${params.learningState?.current_criterion}
-Тема: "${currentTopic}"
-Проверяем: ${currentDesc}
-
-## ПРОГРЕСС: ${passedCriteria.length}/${params.learningState?.criteria?.length || 0} критериев пройдено
-Пройдены: ${passedCriteria.map((criterion) => criterion.id).join(', ') || 'нет'}
-Осталось: ${remainingCriteria.map((criterion) => criterion.id).join(', ')}
-
-## ПРАВИЛА ОЦЕНКИ:
-1. Если ответ показывает понимание темы → passed: true для текущего критерия
-2. После прохождения критерия → current_criterion = следующий непройденный
-3. Если НЕ понял → задай уточняющий вопрос, passed остаётся false
-4. Когда ВСЕ критерии passed: true → all_passed: true
-
-## ТЕКУЩЕЕ СОСТОЯНИЕ (изменяй только нужные поля):
-${JSON.stringify(params.learningState, null, 2)}`;
-    }
+    const systemPrompt = params.profile.systemPrompt || (isInitialization
+      ? buildQuizInitializationPrompt({
+          lessonTitle: params.lessonTitle,
+          lessonDescription: params.lessonDescription,
+          videoTopics: params.videoTopics,
+          customPrompt: params.customPrompt,
+        })
+      : buildQuizFollowUpPrompt({
+          lessonTitle: params.lessonTitle,
+          lessonDescription: params.lessonDescription,
+          videoTopics: params.videoTopics,
+          customPrompt: params.customPrompt,
+          learningState: params.learningState,
+        }));
 
     const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [
       { role: 'user', parts: [{ text: systemPrompt }] },
@@ -256,6 +225,10 @@ ${JSON.stringify(params.learningState, null, 2)}`;
       signal: params.signal,
       body: JSON.stringify({
         contents,
+        generationConfig: {
+          temperature: params.profile.temperature ?? 0.2,
+          maxOutputTokens: params.profile.maxOutputTokens ?? 2048,
+        },
         tools: [{
           functionDeclarations: [{
             name: 'update_learning_state',

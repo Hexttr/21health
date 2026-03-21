@@ -72,7 +72,7 @@ export class OpenAIAdapter implements AIProviderAdapter {
         model: params.model.modelKey,
         stream: false,
         messages: [
-          { role: 'system', content: params.systemPrompt },
+          { role: 'system', content: params.profile.systemPrompt },
           ...params.messages.map((message) => ({
             role: message.role === 'assistant' ? 'assistant' : message.role === 'system' ? 'system' : 'user',
             content: toOpenAIContent(message),

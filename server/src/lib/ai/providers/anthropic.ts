@@ -75,9 +75,9 @@ export class AnthropicAdapter implements AIProviderAdapter {
       signal: params.signal,
       body: JSON.stringify({
         model: params.model.modelKey,
-        max_tokens: 8192,
-        temperature: 0.7,
-        system: params.systemPrompt,
+        max_tokens: params.profile.maxOutputTokens ?? 8192,
+        temperature: params.profile.temperature ?? 0.7,
+        system: params.profile.systemPrompt,
         messages: params.messages
           .filter((message) => message.role !== 'system')
           .map((message) => ({

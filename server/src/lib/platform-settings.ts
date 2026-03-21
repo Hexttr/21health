@@ -17,6 +17,7 @@ export const ALLOWED_PLATFORM_SETTINGS = [
   'course_21_price_rub',
   'course_21_upgrade_price_rub',
   'phone_verification_required_for_referrals',
+  'ai_quiz_model_id',
 ] as const;
 
 export type AllowedPlatformSettingKey = typeof ALLOWED_PLATFORM_SETTINGS[number];

@@ -2,13 +2,13 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import { getAuthFromRequest, JwtPayload } from '../lib/auth.js';
 import { checkBilling, calculateCost, deductBalance, getBalance, logUsage, getMarkupPercent, UsageCost } from '../lib/billing.js';
 import { aiAttachmentConfig, buildAttachmentContext, resolveAttachmentsForUser } from '../lib/ai/attachments.js';
+import { buildGenerationProfile, detectChatTaskMode } from '../lib/ai/generation-profiles.js';
 import { getProviderApiKey, getGeminiKey } from '../lib/provider-keys.js';
+import { buildChatSystemPrompt, buildQuizFollowUpPrompt, buildQuizInitializationPrompt } from '../lib/ai/prompt-builder.js';
 import { getProviderAdapter } from '../lib/ai/provider-registry.js';
 import { translateAiProviderErrorMessage } from '../lib/ai/error-messages.js';
-import { ensureModelSupports, resolveRuntimeModel } from '../lib/ai/runtime.js';
-import { AIChatMessage, AIResolvedModel, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
-
-const DEFAULT_SYSTEM_PROMPT = 'Ты полезный AI-ассистент. Отвечай на русском языке, если пользователь пишет на русском. Давай четкие и полезные ответы. Используй форматирование Markdown когда это уместно.';
+import { ensureModelSupports, resolveQuizRuntimeModel, resolveRuntimeModel } from '../lib/ai/runtime.js';
+import { AIChatMessage, AIResolvedModel, AITaskMode, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
 const MAX_IMAGES = 14;
 const MAX_DOCUMENTS_PER_MESSAGE = aiAttachmentConfig.maxDocumentsPerMessage;
 const MAX_SINGLE_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -127,6 +127,14 @@ async function resolveKeyOrReply(model: AIResolvedModel, reply: FastifyReply): P
     return null;
   }
   return key;
+}
+
+function buildChatProfile(model: AIResolvedModel, taskMode: Exclude<AITaskMode, 'quiz'>) {
+  return buildGenerationProfile({
+    model,
+    taskMode,
+    systemPrompt: buildChatSystemPrompt(taskMode),
+  });
 }
 
 function isModelFree(model: AIResolvedModel): boolean {
@@ -338,12 +346,14 @@ export async function aiRoutes(app: FastifyInstance) {
 
     try {
       const enrichedMessages = await enrichMessagesWithAttachments(payload.userId, messages);
+      const taskMode = detectChatTaskMode(messages);
+      const profile = buildChatProfile(model, taskMode);
       const adapter = getProviderAdapter(model.providerName);
       const result = await adapter.streamChat({
         apiKey: key,
         model,
         messages: enrichedMessages,
-        systemPrompt: DEFAULT_SYSTEM_PROMPT,
+        profile,
         onDelta: (text) => writeSseChunk(reply, text),
         signal: controller.signal,
       });
@@ -475,8 +485,11 @@ export async function aiRoutes(app: FastifyInstance) {
     const payload = requireAuth(req, reply);
     if (!payload) return;
 
-    const model = await resolveRuntimeModel(undefined, 'text');
+    const model = await resolveQuizRuntimeModel();
     if (!model) return reply.status(400).send({ error: 'Нет активной текстовой модели для квиза' });
+    if (model.providerName !== 'gemini') {
+      return reply.status(400).send({ error: 'Для AI-квиза нужна совместимая Gemini-модель. Обновите настройку модели квиза в админке.' });
+    }
 
     const key = await resolveKeyOrReply(model, reply);
     if (!key) return;
@@ -485,6 +498,24 @@ export async function aiRoutes(app: FastifyInstance) {
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
     const { lessonTitle, lessonDescription, videoTopics = [], userAnswer, conversationHistory = [], customPrompt, learningState } = req.body || {};
+    const profile = buildGenerationProfile({
+      model,
+      taskMode: 'quiz',
+      systemPrompt: conversationHistory.length === 0
+        ? buildQuizInitializationPrompt({
+            lessonTitle,
+            lessonDescription,
+            videoTopics,
+            customPrompt,
+          })
+        : buildQuizFollowUpPrompt({
+            lessonTitle,
+            lessonDescription,
+            videoTopics,
+            customPrompt,
+            learningState,
+          }),
+    });
 
     const { controller, cleanup } = createAbortController(req);
     try {
@@ -492,6 +523,7 @@ export async function aiRoutes(app: FastifyInstance) {
       const result = await adapter.runQuiz({
         apiKey: key,
         model,
+        profile,
         lessonTitle,
         lessonDescription,
         videoTopics,

@@ -243,7 +243,7 @@ function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider
 }
 interface AIModel {
   id: string; providerId: string; modelKey: string; displayName: string; modelType: string;
-  supportsStreaming: boolean; supportsImageInput: boolean; supportsImageOutput: boolean; supportsSystemPrompt: boolean;
+  supportsStreaming: boolean; supportsImageInput: boolean; supportsDocumentInput?: boolean; supportsImageOutput: boolean; supportsSystemPrompt: boolean;
   inputPricePer1k: string; outputPricePer1k: string; fixedPrice: string;
   isActive: boolean; sortOrder: number;
 }
@@ -340,6 +340,14 @@ export default function AdminBilling() {
     setModels(models.map(m => m.id === id ? { ...m, [field]: value } : m));
   };
 
+  const quizModelOptions = models
+    .filter((model) => {
+      if (model.modelType !== 'text' || !model.isActive) return false;
+      const provider = providers.find((item) => item.id === model.providerId);
+      return provider?.name === 'gemini';
+    })
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -404,6 +412,27 @@ export default function AdminBilling() {
                 )}
               </div>
             ))}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">Модель AI-квиза</label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Отдельная модель для AI-тьютора и проверки уроков. Рекомендуется выбрать активную Gemini-модель.
+              </p>
+              <select
+                value={settings.ai_quiz_model_id || ''}
+                onChange={(e) => setSettings({ ...settings, ai_quiz_model_id: e.target.value })}
+                className="h-10 w-full rounded-xl border border-border/60 bg-background/90 px-3 text-sm outline-none transition-colors focus:border-primary"
+              >
+                <option value="">Автовыбор первой совместимой Gemini-модели</option>
+                {quizModelOptions.map((model) => {
+                  const provider = providers.find((item) => item.id === model.providerId);
+                  return (
+                    <option key={model.id} value={model.id}>
+                      {model.displayName}{provider ? ` · ${provider.displayName}` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             <Button onClick={saveSettings} className="gap-2 rounded-xl shadow-xs">
               <Save className="w-4 h-4" /> Сохранить настройки
             </Button>

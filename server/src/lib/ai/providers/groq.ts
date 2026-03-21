@@ -34,11 +34,11 @@ export class GroqAdapter implements AIProviderAdapter {
       signal: params.signal,
       body: JSON.stringify({
         model: params.model.modelKey,
-        temperature: 0.7,
+        temperature: params.profile.temperature ?? 0.7,
         stream: true,
         stream_options: { include_usage: true },
         messages: [
-          { role: 'system', content: params.systemPrompt },
+          { role: 'system', content: params.profile.systemPrompt },
           ...params.messages.map((message) => ({
             role: message.role === 'assistant' ? 'assistant' : message.role === 'system' ? 'system' : 'user',
             content: message.content,

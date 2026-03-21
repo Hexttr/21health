@@ -27,11 +27,20 @@ export interface AIResolvedModel {
   fixedPrice: string | null;
 }
 
+export type AITaskMode = 'chat' | 'document_analysis' | 'image_analysis' | 'quiz';
+
+export interface AIGenerationProfile {
+  taskMode: AITaskMode;
+  systemPrompt: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
 export interface StreamChatParams {
   apiKey: string;
   model: AIResolvedModel;
   messages: AIChatMessage[];
-  systemPrompt: string;
+  profile: AIGenerationProfile;
   onDelta: (text: string) => void;
   signal?: AbortSignal;
 }
@@ -67,6 +76,7 @@ export interface QuizLearningState {
 export interface RunQuizParams {
   apiKey: string;
   model: AIResolvedModel;
+  profile: AIGenerationProfile;
   lessonTitle: string;
   lessonDescription: string;
   videoTopics: string[];
