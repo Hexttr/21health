@@ -67,6 +67,35 @@ function toAnthropicContent(message: StreamChatParams['messages'][number]) {
   return blocks.length > 0 ? blocks : [{ type: 'text', text: message.content || ' ' }];
 }
 
+function extractAnthropicUsage(data: unknown): { inputTokens?: number; outputTokens?: number } {
+  if (!data || typeof data !== 'object') {
+    return {};
+  }
+
+  const usage = (data as {
+    usage?: { input_tokens?: number; output_tokens?: number };
+    message?: { usage?: { input_tokens?: number; output_tokens?: number } };
+  }).usage ?? (data as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } }).message?.usage;
+
+  return {
+    inputTokens: usage?.input_tokens,
+    outputTokens: usage?.output_tokens,
+  };
+}
+
+function extractAnthropicStreamText(data: unknown): string | null {
+  if (!data || typeof data !== 'object') {
+    return null;
+  }
+
+  const delta = (data as { delta?: { type?: string; text?: string } }).delta;
+  if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+    return delta.text;
+  }
+
+  return null;
+}
+
 export class AnthropicAdapter implements AIProviderAdapter {
   async streamChat(params: StreamChatParams): Promise<StreamChatResult> {
     const response = await fetch(ANTHROPIC_MESSAGES_URL, {
@@ -77,6 +106,7 @@ export class AnthropicAdapter implements AIProviderAdapter {
         model: params.model.modelKey,
         max_tokens: params.profile.maxOutputTokens ?? 8192,
         temperature: params.profile.temperature ?? 0.7,
+        stream: true,
         system: params.profile.systemPrompt,
         messages: params.messages
           .filter((message) => message.role !== 'system')
@@ -87,29 +117,67 @@ export class AnthropicAdapter implements AIProviderAdapter {
       }),
     });
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       const errText = await response.text();
       throw new Error(parseAnthropicError(errText || 'Anthropic chat error'));
     }
 
-    const data = await response.json() as {
-      content?: Array<{ type?: string; text?: string }>;
-      usage?: { input_tokens?: number; output_tokens?: number };
-    };
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
 
-    const text = (data.content || [])
-      .filter((block) => block.type === 'text' && typeof block.text === 'string')
-      .map((block) => block.text)
-      .join('');
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-    if (text) {
-      params.onDelta(text);
+        let separatorIndex: number;
+        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+          const block = buffer.slice(0, separatorIndex);
+          buffer = buffer.slice(separatorIndex + 2);
+
+          if (!block.trim()) continue;
+          const lines = block.split('\n');
+          const event = lines.find((line) => line.startsWith('event: '))?.slice(7).trim() || '';
+          const dataLines = lines
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6))
+            .join('\n');
+
+          if (!dataLines || dataLines === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(dataLines) as Record<string, unknown>;
+            const usage = extractAnthropicUsage(parsed);
+            inputTokens = usage.inputTokens || inputTokens;
+            outputTokens = usage.outputTokens || outputTokens;
+
+            if (event === 'error') {
+              throw new Error(parseAnthropicError(dataLines));
+            }
+
+            const text = extractAnthropicStreamText(parsed);
+            if (text) {
+              params.onDelta(text);
+            }
+          } catch (error) {
+            if (error instanceof Error) {
+              throw error;
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
     }
 
     return {
       usage: {
-        inputTokens: data.usage?.input_tokens || 0,
-        outputTokens: data.usage?.output_tokens || 0,
+        inputTokens,
+        outputTokens,
       },
     };
   }

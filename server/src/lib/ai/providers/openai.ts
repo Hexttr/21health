@@ -48,6 +48,14 @@ function extractOpenAIText(content: unknown): string {
     .join('');
 }
 
+function extractOpenAIDeltaText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  return extractOpenAIText(content);
+}
+
 function toOpenAIContent(message: StreamChatParams['messages'][number]) {
   if (!message.images?.length) {
     return message.content;
@@ -70,7 +78,10 @@ export class OpenAIAdapter implements AIProviderAdapter {
       signal: params.signal,
       body: JSON.stringify({
         model: params.model.modelKey,
-        stream: false,
+        stream: true,
+        stream_options: { include_usage: true },
+        ...(params.profile.temperature !== undefined ? { temperature: params.profile.temperature } : {}),
+        ...(params.profile.maxOutputTokens !== undefined ? { max_completion_tokens: params.profile.maxOutputTokens } : {}),
         messages: [
           { role: 'system', content: params.profile.systemPrompt },
           ...params.messages.map((message) => ({
@@ -81,25 +92,57 @@ export class OpenAIAdapter implements AIProviderAdapter {
       }),
     });
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       const errText = await response.text();
       throw new Error(parseOpenAIError(errText || 'OpenAI chat error'));
     }
 
-    const data = await response.json() as {
-      choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
-    };
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
 
-    const text = extractOpenAIText(data.choices?.[0]?.message?.content);
-    if (text) {
-      params.onDelta(text);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr) as {
+              choices?: Array<{ delta?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+              usage?: { prompt_tokens?: number; completion_tokens?: number };
+            };
+            const text = extractOpenAIDeltaText(parsed.choices?.[0]?.delta?.content);
+            if (text) {
+              params.onDelta(text);
+            }
+
+            if (parsed.usage) {
+              inputTokens = parsed.usage.prompt_tokens || inputTokens;
+              outputTokens = parsed.usage.completion_tokens || outputTokens;
+            }
+          } catch {
+            // Ignore malformed chunks from upstream streaming.
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
     }
 
     return {
       usage: {
-        inputTokens: data.usage?.prompt_tokens || 0,
-        outputTokens: data.usage?.completion_tokens || 0,
+        inputTokens,
+        outputTokens,
       },
     };
   }
