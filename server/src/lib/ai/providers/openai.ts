@@ -10,6 +10,10 @@ import {
 
 const OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 
+function supportsCustomTemperature(modelKey: string): boolean {
+  return modelKey !== 'gpt-5-mini';
+}
+
 function openaiHeaders(apiKey: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
@@ -80,7 +84,11 @@ export class OpenAIAdapter implements AIProviderAdapter {
         model: params.model.modelKey,
         stream: true,
         stream_options: { include_usage: true },
-        ...(params.profile.temperature !== undefined ? { temperature: params.profile.temperature } : {}),
+        ...(
+          params.profile.temperature !== undefined && supportsCustomTemperature(params.model.modelKey)
+            ? { temperature: params.profile.temperature }
+            : {}
+        ),
         ...(params.profile.maxOutputTokens !== undefined ? { max_completion_tokens: params.profile.maxOutputTokens } : {}),
         messages: [
           { role: 'system', content: params.profile.systemPrompt },
