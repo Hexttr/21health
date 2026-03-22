@@ -57,6 +57,7 @@ async function main() {
       lessonId,
       customDescription: (row.custom_description as string) ?? null,
       videoUrls: (row.video_urls as string[]) ?? [],
+      videoTitles: (row.video_titles as string[]) ?? [],
       videoPreviewUrls: (row.video_preview_urls as string[]) ?? [],
       pdfUrls: (row.pdf_urls as string[]) ?? [],
       additionalMaterials: (row.additional_materials as string) ?? null,

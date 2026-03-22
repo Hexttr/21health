@@ -54,6 +54,7 @@ async function main() {
     const payload = {
       customDescription: (row.customDescription as string) ?? null,
       videoUrls: (row.videoUrls as string[]) ?? [],
+      videoTitles: (row.videoTitles as string[]) ?? [],
       videoPreviewUrls: (row.videoPreviewUrls as string[]) ?? [],
       pdfUrls: (row.pdfUrls as string[]) ?? [],
       additionalMaterials: (row.additionalMaterials as string) ?? null,

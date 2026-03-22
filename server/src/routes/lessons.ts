@@ -111,6 +111,7 @@ export async function lessonRoutes(app: FastifyInstance) {
       lessonId: number;
       customDescription?: string | null;
       videoUrls?: string[];
+      videoTitles?: string[];
       videoPreviewUrls?: string[];
       pdfUrls?: string[];
       additionalMaterials?: string | null;
@@ -134,6 +135,7 @@ export async function lessonRoutes(app: FastifyInstance) {
         .set({
           customDescription: data.customDescription ?? existing.customDescription,
           videoUrls: data.videoUrls ?? existing.videoUrls ?? [],
+          videoTitles: data.videoTitles ?? existing.videoTitles ?? [],
           videoPreviewUrls: data.videoPreviewUrls ?? existing.videoPreviewUrls ?? [],
           pdfUrls: data.pdfUrls ?? existing.pdfUrls ?? [],
           additionalMaterials: data.additionalMaterials ?? existing.additionalMaterials,
@@ -149,6 +151,7 @@ export async function lessonRoutes(app: FastifyInstance) {
           lessonId,
           customDescription: data.customDescription ?? null,
           videoUrls: data.videoUrls ?? [],
+          videoTitles: data.videoTitles ?? [],
           videoPreviewUrls: data.videoPreviewUrls ?? [],
           pdfUrls: data.pdfUrls ?? [],
           additionalMaterials: data.additionalMaterials ?? null,

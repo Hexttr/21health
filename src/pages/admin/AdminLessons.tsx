@@ -31,6 +31,7 @@ interface LessonContent {
   lesson_id: number;
   custom_description: string | null;
   video_urls: string[];
+  video_titles: string[];
   video_preview_urls: string[];
   pdf_urls: string[];
   additional_materials: string | null;
@@ -59,12 +60,13 @@ export default function AdminLessons() {
   const loadLessonContent = async (lessonId: number) => {
     setIsLoading(true);
     try {
-      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}?viewMode=all`);
+      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}?viewMode=all`);
       setLessonContent({
         id: data.id,
         lesson_id: data.lessonId,
         custom_description: data.customDescription,
         video_urls: data.videoUrls || [],
+        video_titles: data.videoTitles || [],
         video_preview_urls: data.videoPreviewUrls || [],
         pdf_urls: data.pdfUrls || [],
         additional_materials: data.additionalMaterials,
@@ -76,6 +78,7 @@ export default function AdminLessons() {
         lesson_id: lessonId,
         custom_description: null,
         video_urls: [],
+        video_titles: [],
         video_preview_urls: [],
         pdf_urls: [],
         additional_materials: null,
@@ -97,6 +100,7 @@ export default function AdminLessons() {
           lessonId: lessonContent.lesson_id,
           customDescription: lessonContent.custom_description,
           videoUrls: lessonContent.video_urls,
+          videoTitles: lessonContent.video_titles,
           videoPreviewUrls: lessonContent.video_preview_urls,
           pdfUrls: lessonContent.pdf_urls,
           additionalMaterials: lessonContent.additional_materials,
@@ -120,6 +124,7 @@ export default function AdminLessons() {
       setLessonContent({
         ...lessonContent,
         video_urls: [...lessonContent.video_urls, ''],
+        video_titles: [...lessonContent.video_titles, ''],
         video_preview_urls: [...(lessonContent.video_preview_urls || []), '']
       });
     }
@@ -128,8 +133,9 @@ export default function AdminLessons() {
   const removeVideoUrl = (index: number) => {
     if (lessonContent) {
       const newUrls = lessonContent.video_urls.filter((_, i) => i !== index);
+      const newTitles = lessonContent.video_titles.filter((_, i) => i !== index);
       const newPreviews = lessonContent.video_preview_urls.filter((_, i) => i !== index);
-      setLessonContent({ ...lessonContent, video_urls: newUrls, video_preview_urls: newPreviews });
+      setLessonContent({ ...lessonContent, video_urls: newUrls, video_titles: newTitles, video_preview_urls: newPreviews });
     }
   };
 
@@ -138,6 +144,15 @@ export default function AdminLessons() {
       const newUrls = [...lessonContent.video_urls];
       newUrls[index] = value;
       setLessonContent({ ...lessonContent, video_urls: newUrls });
+    }
+  };
+
+  const updateVideoTitle = (index: number, value: string) => {
+    if (lessonContent) {
+      const newTitles = [...lessonContent.video_titles];
+      while (newTitles.length <= index) newTitles.push('');
+      newTitles[index] = value;
+      setLessonContent({ ...lessonContent, video_titles: newTitles });
     }
   };
 
@@ -378,8 +393,10 @@ export default function AdminLessons() {
                       <div className="space-y-2">
                         {lessonContent.video_urls.map((url, index) => {
                           const previewUrl = lessonContent.video_preview_urls?.[index];
+                          const currentTitle = lessonContent.video_titles?.[index] || '';
+                          const fallbackTitle = selectedLesson.videoTopics[index] || `Видео ${index + 1}`;
                           return (
-                            <div key={index} className="flex gap-3 items-center p-2 rounded-xl bg-secondary/20 border border-border/50">
+                            <div key={index} className="flex gap-3 items-start p-2 rounded-xl bg-secondary/20 border border-border/50">
                               <div className="relative w-20 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center group">
                                 {previewUrl ? (
                                   <img src={getUploadUrl(previewUrl)} alt="" className="w-full h-full object-cover" />
@@ -401,13 +418,22 @@ export default function AdminLessons() {
                                   />
                                 </label>
                               </div>
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 space-y-2">
                                 <Input
                                   value={url}
                                   onChange={(e) => updateVideoUrl(index, e.target.value)}
                                   placeholder="Ссылка на YouTube или Vimeo"
                                   className="rounded-xl bg-secondary/30 border-border/50 focus:border-primary"
                                 />
+                                <Input
+                                  value={currentTitle}
+                                  onChange={(e) => updateVideoTitle(index, e.target.value)}
+                                  placeholder={fallbackTitle}
+                                  className="rounded-xl bg-background/80 border-border/50 focus:border-primary"
+                                />
+                                <p className="px-1 text-[11px] text-muted-foreground">
+                                  Если поле оставить пустым, на карточке останется старый заголовок: "{fallbackTitle}"
+                                </p>
                               </div>
                               {previewUrl && (
                                 <Button

@@ -38,6 +38,7 @@ interface LessonViewProps {
 interface LessonContent {
   custom_description: string | null;
   video_urls: string[];
+  video_titles?: string[];
   video_preview_urls?: string[];
   pdf_urls: string[];
   additional_materials: string | null;
@@ -116,10 +117,11 @@ export function LessonView({
   const loadLessonContent = async () => {
     try {
       const query = courseViewMode === 'all' ? '?viewMode=all' : '';
-      const data = await api<{ customDescription: string | null; videoUrls: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}${query}`);
+      const data = await api<{ customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}${query}`);
       setLessonContent({
         custom_description: data.customDescription,
         video_urls: data.videoUrls || [],
+        video_titles: data.videoTitles || [],
         video_preview_urls: data.videoPreviewUrls || [],
         pdf_urls: data.pdfUrls || [],
         additional_materials: data.additionalMaterials
@@ -281,7 +283,7 @@ export function LessonView({
                 {lessonContent.video_urls.map((url, index) => {
                   const embedUrl = getVideoEmbedUrl(url);
                   const previewUrl = lessonContent.video_preview_urls?.[index];
-                  const title = lesson.videoTopics[index] || `Видео ${index + 1}`;
+                  const title = lessonContent.video_titles?.[index]?.trim() || lesson.videoTopics[index] || `Видео ${index + 1}`;
                   const isSelected = selectedVideoIndex === index;
                   return (
                     <button
@@ -341,7 +343,7 @@ export function LessonView({
                     >
                       <div className="flex items-center justify-between px-4 py-2.5 bg-secondary/50 border-b border-border/50 flex-shrink-0">
                         <span className="font-medium text-sm text-foreground min-w-0 truncate pr-3">
-                          {lesson.videoTopics[selectedVideoIndex] || `Видео ${selectedVideoIndex + 1}`}
+                          {lessonContent.video_titles?.[selectedVideoIndex]?.trim() || lesson.videoTopics[selectedVideoIndex] || `Видео ${selectedVideoIndex + 1}`}
                         </span>
                         <button
                           type="button"
