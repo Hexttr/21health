@@ -71,6 +71,13 @@
       "when": 1774110000000,
       "tag": "0009_student_bonus_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774200000000,
+      "tag": "0010_lesson_video_titles",
+      "breakpoints": true
     }
   ]
 }
