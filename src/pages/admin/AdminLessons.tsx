@@ -45,10 +45,12 @@ export default function AdminLessons() {
   const { viewMode, setViewMode } = useCourseViewMode();
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
+  const [nonOverridePromptDraft, setNonOverridePromptDraft] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingPreviewIndex, setUploadingPreviewIndex] = useState<number | null>(null);
+  const [isPreparingOverride, setIsPreparingOverride] = useState(false);
 
   const allLessons = getAllLessons();
   const selectedLesson = allLessons.find(l => l.id === selectedLessonId);
@@ -76,6 +78,7 @@ export default function AdminLessons() {
         ai_prompt: data.aiPrompt || null,
         ai_prompt_is_override: data.aiPromptIsOverride === true,
       });
+      setNonOverridePromptDraft(data.aiPromptIsOverride === true ? null : (data.aiPrompt || null));
     } catch {
       setLessonContent({
         lesson_id: lessonId,
@@ -89,9 +92,63 @@ export default function AdminLessons() {
         ai_prompt: null,
         ai_prompt_is_override: false,
       });
+      setNonOverridePromptDraft(null);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const buildTutorPromptPreview = async (customPrompt: string | null) => {
+    if (!selectedLesson) {
+      throw new Error('Сначала выберите урок');
+    }
+
+    const result = await api<{ prompt: string }>('/admin/lessons/quiz-prompt-preview', {
+      method: 'POST',
+      body: {
+        lessonTitle: selectedLesson.title,
+        lessonDescription: selectedLesson.description,
+        videoTopics: selectedLesson.videoTopics,
+        customPrompt,
+      },
+    });
+
+    return result.prompt;
+  };
+
+  const enablePromptOverride = async () => {
+    if (!lessonContent || !selectedLesson) return;
+    if (lessonContent.ai_prompt_is_override) return;
+
+    const additionalInstructions = lessonContent.ai_prompt || null;
+    setNonOverridePromptDraft(additionalInstructions);
+    setIsPreparingOverride(true);
+    try {
+      const previewPrompt = await buildTutorPromptPreview(additionalInstructions);
+      setLessonContent((prev) => (
+        prev
+          ? {
+              ...prev,
+              ai_prompt_is_override: true,
+              ai_prompt: previewPrompt,
+            }
+          : prev
+      ));
+    } catch (error) {
+      console.error('Error building tutor prompt preview:', error);
+      toast.error('Не удалось подготовить базовый промпт');
+    } finally {
+      setIsPreparingOverride(false);
+    }
+  };
+
+  const disablePromptOverride = () => {
+    if (!lessonContent) return;
+    setLessonContent({
+      ...lessonContent,
+      ai_prompt_is_override: false,
+      ai_prompt: nonOverridePromptDraft,
+    });
   };
 
   const saveLessonContent = async () => {
@@ -533,7 +590,7 @@ export default function AdminLessons() {
                     <div className="inline-flex rounded-xl border border-border/60 bg-background/80 p-1">
                       <button
                         type="button"
-                        onClick={() => setLessonContent({ ...lessonContent, ai_prompt_is_override: false })}
+                        onClick={disablePromptOverride}
                         className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           !lessonContent.ai_prompt_is_override
                             ? 'bg-primary text-primary-foreground shadow-sm'
@@ -544,19 +601,26 @@ export default function AdminLessons() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLessonContent({ ...lessonContent, ai_prompt_is_override: true })}
+                        onClick={enablePromptOverride}
+                        disabled={isPreparingOverride}
                         className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                           lessonContent.ai_prompt_is_override
                             ? 'bg-destructive text-destructive-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        Полный override
+                        {isPreparingOverride ? 'Подготовка...' : 'Полный override'}
                       </button>
                     </div>
                     <Textarea
                       value={lessonContent.ai_prompt || ''}
-                      onChange={(e) => setLessonContent({ ...lessonContent, ai_prompt: e.target.value || null })}
+                      onChange={(e) => {
+                        const nextValue = e.target.value || null;
+                        setLessonContent({ ...lessonContent, ai_prompt: nextValue });
+                        if (!lessonContent.ai_prompt_is_override) {
+                          setNonOverridePromptDraft(nextValue);
+                        }
+                      }}
                       placeholder={lessonContent.ai_prompt_is_override
                         ? 'Введите полный системный промпт для AI-тьютора...'
                         : 'Добавьте дополнительные инструкции к базовому промпту...'}
@@ -567,8 +631,9 @@ export default function AdminLessons() {
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                           <p>
-                            В режиме полного override базовый промпт системы не используется. Если поле оставить пустым,
-                            тьютор автоматически вернётся к текущему базовому сценарию.
+                            В поле уже подставлен сгенерированный базовый промпт для этого урока. Его можно
+                            отредактировать полностью. Если поле оставить пустым, тьютор автоматически вернётся к
+                            текущему базовому сценарию.
                           </p>
                         </div>
                       </div>

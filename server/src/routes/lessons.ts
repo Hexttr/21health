@@ -5,6 +5,7 @@ import { lessonContent, studentProgress } from '../db/schema.js';
 import { getAuthFromRequest } from '../lib/auth.js';
 import { getLessonAccessState } from '../lib/lesson-access.js';
 import { getEffectiveCourseAccess } from '../lib/course-access.js';
+import { buildQuizInitializationPrompt } from '../lib/ai/prompt-builder.js';
 
 export async function lessonRoutes(app: FastifyInstance) {
   // Get published lessons (authenticated, ai_user — нет доступа)
@@ -164,5 +165,33 @@ export async function lessonRoutes(app: FastifyInstance) {
         .returning();
     }
     return reply.send(row);
+  });
+
+  app.post<{
+    Body: {
+      lessonTitle: string;
+      lessonDescription: string;
+      videoTopics?: string[];
+      customPrompt?: string | null;
+    };
+  }>('/admin/lessons/quiz-prompt-preview', async (req, reply) => {
+    const payload = getAuthFromRequest(req);
+    if (!payload || payload.role !== 'admin') {
+      return reply.status(403).send({ error: 'Требуются права администратора' });
+    }
+
+    const { lessonTitle, lessonDescription, videoTopics = [], customPrompt } = req.body || {};
+    if (!lessonTitle || !lessonDescription) {
+      return reply.status(400).send({ error: 'lessonTitle и lessonDescription обязательны' });
+    }
+
+    return reply.send({
+      prompt: buildQuizInitializationPrompt({
+        lessonTitle,
+        lessonDescription,
+        videoTopics,
+        customPrompt: customPrompt ?? undefined,
+      }),
+    });
   });
 }
