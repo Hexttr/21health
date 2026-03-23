@@ -54,6 +54,7 @@ export function AIQuiz({ lesson, onClose, courseViewMode = 'student' }: AIQuizPr
   const [isComplete, setIsComplete] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string | null>(null);
+  const [customPromptIsOverride, setCustomPromptIsOverride] = useState(false);
   const [learningState, setLearningState] = useState<LearningState | null>(null);
   const [waitingLong, setWaitingLong] = useState(false);
   const waitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,14 +83,17 @@ export function AIQuiz({ lesson, onClose, courseViewMode = 'student' }: AIQuizPr
     try {
       // Load custom AI prompt from lesson_content
       let prompt: string | null = null;
+      let promptIsOverride = false;
       try {
         const query = courseViewMode === 'all' ? '?viewMode=all' : '';
-        const lessonData = await api<{ aiPrompt: string | null }>(`/lessons/${lesson.id}${query}`);
+        const lessonData = await api<{ aiPrompt: string | null; aiPromptIsOverride?: boolean }>(`/lessons/${lesson.id}${query}`);
         prompt = lessonData?.aiPrompt || null;
+        promptIsOverride = lessonData?.aiPromptIsOverride === true;
       } catch {
         // Lesson content may not exist
       }
       setCustomPrompt(prompt);
+      setCustomPromptIsOverride(promptIsOverride);
       console.log(`[AIQuiz] Custom prompt loaded: ${prompt ? 'yes' : 'no'}`);
 
       // Initialize quiz - AI will create learning plan
@@ -103,6 +107,7 @@ export function AIQuiz({ lesson, onClose, courseViewMode = 'student' }: AIQuizPr
           userAnswer: null,
           conversationHistory: [],
           customPrompt: prompt,
+          customPromptIsOverride: promptIsOverride,
           learningState: null
         }
       });
@@ -196,6 +201,7 @@ export function AIQuiz({ lesson, onClose, courseViewMode = 'student' }: AIQuizPr
           userAnswer: userMessage,
           conversationHistory: contextHistory,
           customPrompt,
+          customPromptIsOverride,
           learningState
         }
       });

@@ -116,6 +116,7 @@ export async function lessonRoutes(app: FastifyInstance) {
       pdfUrls?: string[];
       additionalMaterials?: string | null;
       aiPrompt?: string | null;
+      aiPromptIsOverride?: boolean;
       isPublished?: boolean;
     };
   }>('/admin/lessons', async (req, reply) => {
@@ -140,6 +141,7 @@ export async function lessonRoutes(app: FastifyInstance) {
           pdfUrls: data.pdfUrls ?? existing.pdfUrls ?? [],
           additionalMaterials: data.additionalMaterials ?? existing.additionalMaterials,
           aiPrompt: data.aiPrompt ?? existing.aiPrompt,
+          aiPromptIsOverride: data.aiPromptIsOverride ?? existing.aiPromptIsOverride ?? false,
           isPublished: data.isPublished ?? existing.isPublished ?? true,
         })
         .where(eq(lessonContent.id, existing.id))
@@ -156,6 +158,7 @@ export async function lessonRoutes(app: FastifyInstance) {
           pdfUrls: data.pdfUrls ?? [],
           additionalMaterials: data.additionalMaterials ?? null,
           aiPrompt: data.aiPrompt ?? null,
+          aiPromptIsOverride: data.aiPromptIsOverride ?? false,
           isPublished: data.isPublished ?? true,
         })
         .returning();

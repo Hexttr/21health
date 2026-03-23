@@ -58,6 +58,7 @@ export const lessonContent = pgTable('lesson_content', {
   pdfUrls: text('pdf_urls').array().default([]),
   additionalMaterials: text('additional_materials'),
   aiPrompt: text('ai_prompt'),
+  aiPromptIsOverride: boolean('ai_prompt_is_override').notNull().default(false),
   isPublished: boolean('is_published').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -23,6 +23,7 @@ import {
   EyeOff,
   ImagePlus,
   Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +38,7 @@ interface LessonContent {
   additional_materials: string | null;
   is_published: boolean;
   ai_prompt: string | null;
+  ai_prompt_is_override: boolean;
 }
 
 export default function AdminLessons() {
@@ -60,7 +62,7 @@ export default function AdminLessons() {
   const loadLessonContent = async (lessonId: number) => {
     setIsLoading(true);
     try {
-      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null }>(`/lessons/${lessonId}?viewMode=all`);
+      const data = await api<{ id: string; lessonId: number; customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; isPublished: boolean; aiPrompt: string | null; aiPromptIsOverride?: boolean }>(`/lessons/${lessonId}?viewMode=all`);
       setLessonContent({
         id: data.id,
         lesson_id: data.lessonId,
@@ -71,7 +73,8 @@ export default function AdminLessons() {
         pdf_urls: data.pdfUrls || [],
         additional_materials: data.additionalMaterials,
         is_published: data.isPublished ?? true,
-        ai_prompt: data.aiPrompt || null
+        ai_prompt: data.aiPrompt || null,
+        ai_prompt_is_override: data.aiPromptIsOverride === true,
       });
     } catch {
       setLessonContent({
@@ -83,7 +86,8 @@ export default function AdminLessons() {
         pdf_urls: [],
         additional_materials: null,
         is_published: true,
-        ai_prompt: null
+        ai_prompt: null,
+        ai_prompt_is_override: false,
       });
     } finally {
       setIsLoading(false);
@@ -105,7 +109,8 @@ export default function AdminLessons() {
           pdfUrls: lessonContent.pdf_urls,
           additionalMaterials: lessonContent.additional_materials,
           isPublished: lessonContent.is_published,
-          aiPrompt: lessonContent.ai_prompt
+          aiPrompt: lessonContent.ai_prompt,
+          aiPromptIsOverride: lessonContent.ai_prompt_is_override,
         }
       });
       toast.success('Контент сохранён!');
@@ -523,28 +528,69 @@ export default function AdminLessons() {
                   <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 sm:p-6 space-y-3">
                     <Label className="flex items-center gap-2 font-medium">
                       <span className="text-base">🤖</span>
-                      Промпт для AI-тьютора
+                      Настройки AI-тьютора
                     </Label>
+                    <div className="inline-flex rounded-xl border border-border/60 bg-background/80 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setLessonContent({ ...lessonContent, ai_prompt_is_override: false })}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          !lessonContent.ai_prompt_is_override
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Доп. инструкции
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLessonContent({ ...lessonContent, ai_prompt_is_override: true })}
+                        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          lessonContent.ai_prompt_is_override
+                            ? 'bg-destructive text-destructive-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Полный override
+                      </button>
+                    </div>
                     <Textarea
                       value={lessonContent.ai_prompt || ''}
                       onChange={(e) => setLessonContent({ ...lessonContent, ai_prompt: e.target.value || null })}
-                      placeholder="Опишите, чему AI должен учить студента в этом уроке..."
+                      placeholder={lessonContent.ai_prompt_is_override
+                        ? 'Введите полный системный промпт для AI-тьютора...'
+                        : 'Добавьте дополнительные инструкции к базовому промпту...'}
                       className="min-h-[110px] rounded-xl bg-secondary/30 border-border/50 focus:border-primary resize-none"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Определяет поведение AI-тьютора при проверке знаний. Оставьте пустым для стандартного промпта.
-                    </p>
+                    {lessonContent.ai_prompt_is_override ? (
+                      <div className="rounded-xl border border-destructive/25 bg-destructive/5 px-4 py-3 text-sm text-foreground">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                          <p>
+                            В режиме полного override базовый промпт системы не используется. Если поле оставить пустым,
+                            тьютор автоматически вернётся к текущему базовому сценарию.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Этот текст добавляется к текущему рабочему базовому промпту. Если поле пустое, тьютор работает как сейчас.
+                      </p>
+                    )}
                   </div>
 
-                  {/* Additional Materials */}
+                  {/* Practical Task */}
                   <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 sm:p-6 space-y-3">
-                    <Label className="font-medium">Дополнительные материалы</Label>
+                    <Label className="font-medium">Практическое задание</Label>
                     <Textarea
                       value={lessonContent.additional_materials || ''}
                       onChange={(e) => setLessonContent({ ...lessonContent, additional_materials: e.target.value || null })}
-                      placeholder="Ссылки на документы, статьи, шаблоны..."
+                      placeholder="Текст практического задания для ученика..."
                       className="min-h-[80px] rounded-xl bg-secondary/30 border-border/50 focus:border-primary resize-none"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Если оставить поле пустым, на странице урока будет показано старое задание из базовых данных курса.
+                    </p>
                   </div>
 
                   {/* Save Button */}

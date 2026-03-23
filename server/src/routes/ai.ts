@@ -479,6 +479,7 @@ export async function aiRoutes(app: FastifyInstance) {
       userAnswer?: string;
       conversationHistory?: Array<{ role: string; content: string }>;
       customPrompt?: string;
+      customPromptIsOverride?: boolean;
       learningState?: QuizLearningState;
     };
   }>('/ai/quiz', async (req, reply) => {
@@ -497,11 +498,19 @@ export async function aiRoutes(app: FastifyInstance) {
     const billing = await resolveBillingForModel(payload, model);
     if (!billing.canProceed) return reply.status(402).send({ error: 'Недостаточно средств. Пополните баланс.' });
 
-    const { lessonTitle, lessonDescription, videoTopics = [], userAnswer, conversationHistory = [], customPrompt, learningState } = req.body || {};
-    const profile = buildGenerationProfile({
-      model,
-      taskMode: 'quiz',
-      systemPrompt: conversationHistory.length === 0
+    const {
+      lessonTitle,
+      lessonDescription,
+      videoTopics = [],
+      userAnswer,
+      conversationHistory = [],
+      customPrompt,
+      customPromptIsOverride = false,
+      learningState,
+    } = req.body || {};
+    const systemPrompt = customPromptIsOverride && customPrompt?.trim()
+      ? customPrompt.trim()
+      : conversationHistory.length === 0
         ? buildQuizInitializationPrompt({
             lessonTitle,
             lessonDescription,
@@ -514,7 +523,11 @@ export async function aiRoutes(app: FastifyInstance) {
             videoTopics,
             customPrompt,
             learningState,
-          }),
+          });
+    const profile = buildGenerationProfile({
+      model,
+      taskMode: 'quiz',
+      systemPrompt,
     });
 
     const { controller, cleanup } = createAbortController(req);

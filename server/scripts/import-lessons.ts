@@ -62,6 +62,7 @@ async function main() {
       pdfUrls: (row.pdf_urls as string[]) ?? [],
       additionalMaterials: (row.additional_materials as string) ?? null,
       aiPrompt: (row.ai_prompt as string) ?? null,
+      aiPromptIsOverride: row.ai_prompt_is_override === true,
       isPublished: row.is_published !== false,
     };
 

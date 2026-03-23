@@ -42,6 +42,8 @@ interface LessonContent {
   video_preview_urls?: string[];
   pdf_urls: string[];
   additional_materials: string | null;
+  ai_prompt?: string | null;
+  ai_prompt_is_override?: boolean;
 }
 
 export function LessonView({
@@ -117,14 +119,16 @@ export function LessonView({
   const loadLessonContent = async () => {
     try {
       const query = courseViewMode === 'all' ? '?viewMode=all' : '';
-      const data = await api<{ customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null }>(`/lessons/${lesson.id}${query}`);
+      const data = await api<{ customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; aiPrompt?: string | null; aiPromptIsOverride?: boolean }>(`/lessons/${lesson.id}${query}`);
       setLessonContent({
         custom_description: data.customDescription,
         video_urls: data.videoUrls || [],
         video_titles: data.videoTitles || [],
         video_preview_urls: data.videoPreviewUrls || [],
         pdf_urls: data.pdfUrls || [],
-        additional_materials: data.additionalMaterials
+        additional_materials: data.additionalMaterials,
+        ai_prompt: data.aiPrompt || null,
+        ai_prompt_is_override: data.aiPromptIsOverride === true,
       });
     } catch {
       // Lesson content may not exist yet
@@ -405,21 +409,6 @@ export function LessonView({
             </div>
           )}
 
-          {/* Additional Materials */}
-          {lessonContent?.additional_materials && (
-            <div className="mt-4 p-5 rounded-xl bg-primary/5 border border-primary/20">
-              <h3 className="font-medium text-foreground mb-2 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-primary" />
-                </div>
-                Дополнительные материалы
-              </h3>
-              <p className="text-muted-foreground whitespace-pre-line">
-                {lessonContent.additional_materials}
-              </p>
-            </div>
-          )}
-
           {/* PDF Presentations */}
           {lessonContent?.pdf_urls && lessonContent.pdf_urls.length > 0 && (
             <div className="mt-4 p-5 rounded-xl bg-primary/5 border border-primary/20">
@@ -466,7 +455,7 @@ export function LessonView({
           </div>
           <div className="p-5 rounded-xl bg-secondary/30 border border-border/50">
             <p className="text-foreground whitespace-pre-line leading-relaxed">
-              {lesson.task}
+              {lessonContent?.additional_materials?.trim() || lesson.task}
             </p>
           </div>
         </div>
