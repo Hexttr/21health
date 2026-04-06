@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lessonContent, studentProgress } from '../db/schema.js';
+import { getEffectiveCourseAccess } from './course-access.js';
 
 export type LessonAccessReason = 'ok' | 'not_found' | 'unpublished' | 'previous_quiz_incomplete';
 
@@ -46,6 +47,17 @@ export async function getLessonAccessState(
       lessonExists: true,
       isPublished: Boolean(lesson.isPublished),
       previousLessonId: null,
+    };
+  }
+
+  const access = await getEffectiveCourseAccess(userId);
+  if (access.role === 'ai_user' || lessonId > access.grantedLessons) {
+    return {
+      canAccess: false,
+      reason: 'previous_quiz_incomplete',
+      lessonExists: true,
+      isPublished: Boolean(lesson.isPublished),
+      previousLessonId: lessonId > 1 ? lessonId - 1 : null,
     };
   }
 

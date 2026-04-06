@@ -59,6 +59,7 @@ export function LessonView({
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
+  const [lessonContentError, setLessonContentError] = useState<string | null>(null);
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
   const [isPlayerVisible, setIsPlayerVisible] = useState(false);
   const [playerReadyToShow, setPlayerReadyToShow] = useState(false);
@@ -118,6 +119,7 @@ export function LessonView({
 
   const loadLessonContent = async () => {
     try {
+      setLessonContentError(null);
       const query = courseViewMode === 'all' ? '?viewMode=all' : '';
       const data = await api<{ customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; aiPrompt?: string | null; aiPromptIsOverride?: boolean }>(`/lessons/${lesson.id}${query}`);
       setLessonContent({
@@ -130,8 +132,9 @@ export function LessonView({
         ai_prompt: data.aiPrompt || null,
         ai_prompt_is_override: data.aiPromptIsOverride === true,
       });
-    } catch {
-      // Lesson content may not exist yet
+    } catch (error) {
+      setLessonContent(null);
+      setLessonContentError(error instanceof Error ? error.message : 'Не удалось загрузить материалы урока');
     }
   };
 
@@ -180,6 +183,40 @@ export function LessonView({
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto mb-6">
               {lockMessage}
+            </p>
+            <Button onClick={onBack} className="rounded-xl">
+              <ChevronLeft className="w-4 h-4 mr-2" />
+              Вернуться к курсу
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (lessonContentError) {
+    return (
+      <div className="animate-fade-in-up">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors focus-ring rounded-lg px-2 py-1 -ml-2"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="text-sm font-medium">К урокам</span>
+          </button>
+        </div>
+
+        <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-soft overflow-hidden">
+          <div className="p-8 sm:p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-muted/50 flex items-center justify-center">
+              <Lock className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h1 className="font-serif text-display-sm text-foreground mb-4">
+              Урок временно недоступен
+            </h1>
+            <p className="text-muted-foreground max-w-md mx-auto mb-6">
+              {lessonContentError}
             </p>
             <Button onClick={onBack} className="rounded-xl">
               <ChevronLeft className="w-4 h-4 mr-2" />
