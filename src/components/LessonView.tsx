@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/collapsible";
 import { AIQuiz } from './AIQuiz';
 import { CourseViewMode } from '@/hooks/useCourseViewMode';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -56,6 +57,7 @@ export function LessonView({
   courseViewMode = 'student',
 }: LessonViewProps) {
   const { isLessonCompleted, isQuizCompleted } = useProgress();
+  const { impersonatedUser, isImpersonating } = useImpersonation();
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(true);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonContent, setLessonContent] = useState<LessonContent | null>(null);
@@ -115,12 +117,19 @@ export function LessonView({
     if (isAccessible) {
       loadLessonContent();
     }
-  }, [lesson.id, isAccessible, courseViewMode]);
+  }, [lesson.id, isAccessible, courseViewMode, impersonatedUser?.user_id, isImpersonating]);
 
   const loadLessonContent = async () => {
     try {
       setLessonContentError(null);
-      const query = courseViewMode === 'all' ? '?viewMode=all' : '';
+      const params = new URLSearchParams();
+      if (courseViewMode === 'all') {
+        params.set('viewMode', 'all');
+      }
+      if (isImpersonating && impersonatedUser?.user_id) {
+        params.set('userId', impersonatedUser.user_id);
+      }
+      const query = params.toString() ? `?${params.toString()}` : '';
       const data = await api<{ customDescription: string | null; videoUrls: string[]; videoTitles?: string[]; videoPreviewUrls?: string[]; pdfUrls: string[]; additionalMaterials: string | null; aiPrompt?: string | null; aiPromptIsOverride?: boolean }>(`/lessons/${lesson.id}${query}`);
       setLessonContent({
         custom_description: data.customDescription,

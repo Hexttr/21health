@@ -9,15 +9,16 @@ import { buildQuizInitializationPrompt } from '../lib/ai/prompt-builder.js';
 
 export async function lessonRoutes(app: FastifyInstance) {
   // Get published lessons (authenticated, ai_user — нет доступа)
-  app.get<{ Querystring: { viewMode?: string } }>('/lessons', async (req, reply) => {
+  app.get<{ Querystring: { viewMode?: string; userId?: string } }>('/lessons', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload) {
       return reply.status(401).send({ error: 'Не авторизован' });
     }
-    const access = await getEffectiveCourseAccess(payload.userId);
+    const targetUserId = payload.role === 'admin' && req.query.userId ? req.query.userId : payload.userId;
+    const access = await getEffectiveCourseAccess(targetUserId);
 
     const viewMode = req.query.viewMode === 'all' ? 'all' : 'student';
-    const bypassAllRestrictions = access.role === 'admin' && viewMode === 'all';
+    const bypassAllRestrictions = payload.role === 'admin' && !req.query.userId && viewMode === 'all';
 
     const rows = await db.select().from(lessonContent).orderBy(asc(lessonContent.lessonId));
     if (bypassAllRestrictions) {
@@ -29,7 +30,7 @@ export async function lessonRoutes(app: FastifyInstance) {
       .from(studentProgress)
       .where(
         and(
-          eq(studentProgress.userId, payload.userId),
+          eq(studentProgress.userId, targetUserId),
           eq(studentProgress.quizCompleted, true)
         )
       );
@@ -50,7 +51,7 @@ export async function lessonRoutes(app: FastifyInstance) {
   });
 
   // Get single lesson by lesson_id
-  app.get<{ Params: { lessonId: string }; Querystring: { viewMode?: string } }>('/lessons/:lessonId', async (req, reply) => {
+  app.get<{ Params: { lessonId: string }; Querystring: { viewMode?: string; userId?: string } }>('/lessons/:lessonId', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload) {
       return reply.status(401).send({ error: 'Не авторизован' });
@@ -60,7 +61,8 @@ export async function lessonRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Некорректный ID урока' });
     }
 
-    const access = await getEffectiveCourseAccess(payload.userId);
+    const targetUserId = payload.role === 'admin' && req.query.userId ? req.query.userId : payload.userId;
+    const access = await getEffectiveCourseAccess(targetUserId);
     if (access.role === 'ai_user') {
       return reply.status(403).send({ error: 'Приобретите доступ к курсу, чтобы открыть урок' });
     }
@@ -70,8 +72,8 @@ export async function lessonRoutes(app: FastifyInstance) {
     }
 
     const viewMode = req.query.viewMode === 'all' ? 'all' : 'student';
-    const accessState = await getLessonAccessState(payload.userId, lessonId, {
-      bypassAllRestrictions: access.role === 'admin' && viewMode === 'all',
+    const accessState = await getLessonAccessState(targetUserId, lessonId, {
+      bypassAllRestrictions: payload.role === 'admin' && !req.query.userId && viewMode === 'all',
     });
     if (!accessState.lessonExists) {
       return reply.status(404).send({ error: 'Урок не найден' });

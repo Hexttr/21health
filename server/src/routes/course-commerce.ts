@@ -47,13 +47,14 @@ export async function courseCommerceRoutes(app: FastifyInstance) {
     })));
   });
 
-  app.get('/course-access', async (req, reply) => {
+  app.get<{ Querystring: { userId?: string } }>('/course-access', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload) {
       return reply.status(401).send({ error: 'Не авторизован' });
     }
 
-    const access = await getEffectiveCourseAccess(payload.userId);
+    const targetUserId = payload.role === 'admin' && req.query.userId ? req.query.userId : payload.userId;
+    const access = await getEffectiveCourseAccess(targetUserId);
     return reply.send(access);
   });
 

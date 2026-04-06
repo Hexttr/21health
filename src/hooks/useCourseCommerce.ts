@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 
 export interface CourseProduct {
   id: string;
@@ -26,6 +27,7 @@ export interface CourseAccessState {
 
 export function useCourseCommerce() {
   const { isSessionReady, isAuthenticated } = useAuth();
+  const { impersonatedUser, isImpersonating } = useImpersonation();
   const [courses, setCourses] = useState<CourseProduct[]>([]);
   const [access, setAccess] = useState<CourseAccessState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,9 +42,12 @@ export function useCourseCommerce() {
 
     setLoading(true);
     try {
+      const accessQuery = isImpersonating && impersonatedUser?.user_id
+        ? `?userId=${encodeURIComponent(impersonatedUser.user_id)}`
+        : '';
       const [courseRows, accessRow] = await Promise.all([
         api<CourseProduct[]>('/courses'),
-        api<CourseAccessState>('/course-access'),
+        api<CourseAccessState>(`/course-access${accessQuery}`),
       ]);
       setCourses(courseRows);
       setAccess(accessRow);
@@ -51,7 +56,7 @@ export function useCourseCommerce() {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, isSessionReady]);
+  }, [impersonatedUser?.user_id, isAuthenticated, isImpersonating, isSessionReady]);
 
   useEffect(() => {
     refresh();

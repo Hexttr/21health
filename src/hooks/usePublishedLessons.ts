@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { api } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { CourseViewMode } from './useCourseViewMode';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 
 interface LessonVisibilityRow {
   lessonId: number;
@@ -10,6 +11,7 @@ interface LessonVisibilityRow {
 
 export function usePublishedLessons(viewMode: CourseViewMode = 'student') {
   const { isSessionReady } = useAuth();
+  const { impersonatedUser, isImpersonating } = useImpersonation();
   
   // ALL useState hooks FIRST (critical for HMR stability)
   const [visibleLessons, setVisibleLessons] = useState<Set<number>>(new Set());
@@ -40,7 +42,14 @@ export function usePublishedLessons(viewMode: CourseViewMode = 'student') {
     console.log('[PublishedLessons] Starting fetch, force:', force, 'timestamp:', Date.now());
     
     try {
-      const query = viewMode === 'all' ? '?viewMode=all' : '';
+      const params = new URLSearchParams();
+      if (viewMode === 'all') {
+        params.set('viewMode', 'all');
+      }
+      if (isImpersonating && impersonatedUser?.user_id) {
+        params.set('userId', impersonatedUser.user_id);
+      }
+      const query = params.toString() ? `?${params.toString()}` : '';
       const data = await api<LessonVisibilityRow[]>(`/lessons${query}`);
 
       if (!mountedRef.current) {
@@ -66,7 +75,7 @@ export function usePublishedLessons(viewMode: CourseViewMode = 'student') {
         isFetchingRef.current = false;
       }
     }
-  }, [viewMode]);
+  }, [impersonatedUser?.user_id, isImpersonating, viewMode]);
 
   // Load only when session is ready - ALWAYS force fetch on mount to bypass cache
   useEffect(() => {
