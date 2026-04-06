@@ -5,7 +5,7 @@ export interface AppUser {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'student' | 'ai_user';
+  role: 'admin' | 'student_14' | 'student_21' | 'ai_user';
   phone?: string | null;
   phoneVerifiedAt?: string | null;
 }

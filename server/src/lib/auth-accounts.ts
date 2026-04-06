@@ -12,7 +12,7 @@ import { hashPassword, signToken } from './auth.js';
 import { createReferralAttribution, ensureReferralCode } from './referrals.js';
 import { normalizePhone } from './phone-verification.js';
 
-export type AppRole = 'admin' | 'student' | 'ai_user';
+export type AppRole = 'admin' | 'student_14' | 'student_21' | 'ai_user';
 export type SocialProvider = 'vkid';
 
 export interface AuthUserDto {
@@ -37,7 +37,7 @@ export interface AccessCodeValidationResult {
 }
 
 interface ResolvedSignupContext {
-  role: 'student' | 'ai_user';
+  role: 'student_21' | 'ai_user';
   invitationCodeId: string | null;
   referralCode: string | null;
 }
@@ -110,7 +110,7 @@ async function resolveSignupContext(params: {
   invitationCode?: string;
   referralCode?: string;
 }): Promise<ResolvedSignupContext> {
-  let role: 'student' | 'ai_user' = 'ai_user';
+  let role: 'student_21' | 'ai_user' = 'ai_user';
   let invitationCodeId: string | null = null;
   let normalizedReferralCode = params.referralCode?.trim().toUpperCase() || null;
   const normalizedInvitationCode = params.invitationCode?.trim().toUpperCase() || null;
@@ -143,7 +143,7 @@ async function resolveSignupContext(params: {
     }
 
     invitationCodeId = codeRow.id;
-    role = 'student';
+    role = 'student_21';
   } else if (normalizedAccessCode && !normalizedReferralCode) {
     throw new Error('Недействительный код доступа');
   }
@@ -167,7 +167,7 @@ export async function loadAuthUserById(userId: string): Promise<AuthUserDto | nu
   }
 
   const [roleRow] = await db.select().from(userRoles).where(eq(userRoles.userId, user.id));
-  const role = (roleRow?.role as AppRole) || 'student';
+  const role = (roleRow?.role as AppRole) || 'ai_user';
 
   return {
     id: user.id,

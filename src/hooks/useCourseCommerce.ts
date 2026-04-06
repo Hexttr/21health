@@ -16,7 +16,7 @@ export interface CourseProduct {
 }
 
 export interface CourseAccessState {
-  role: 'admin' | 'student' | 'ai_user';
+  role: 'admin' | 'student_14' | 'student_21' | 'ai_user';
   courseCode: string | null;
   courseTitle: string | null;
   grantedLessons: number;

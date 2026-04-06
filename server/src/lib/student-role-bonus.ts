@@ -5,7 +5,7 @@ import { creditBalance } from './billing.js';
 import { getAllowedPlatformSetting } from './platform-settings.js';
 import { tokensToRub } from './referrals.js';
 
-export type AppRole = 'admin' | 'student' | 'ai_user';
+export type AppRole = 'admin' | 'student_14' | 'student_21' | 'ai_user';
 
 const DEFAULT_STUDENT_BONUS_TOKENS = 10000;
 
@@ -20,7 +20,10 @@ export async function grantFirstStudentBonusIfEligible(
   previousRole: AppRole,
   nextRole: AppRole,
 ): Promise<number> {
-  if (previousRole !== 'ai_user' || nextRole !== 'student') {
+  if (
+    previousRole !== 'ai_user' ||
+    (nextRole !== 'student_14' && nextRole !== 'student_21')
+  ) {
     return 0;
   }
 
@@ -42,7 +45,7 @@ export async function grantFirstStudentBonusIfEligible(
       userId,
       amountRub,
       'bonus',
-      'Разовый бонус за первый переход из Пользователя ИИ в Студента',
+      'Разовый бонус за первый переход из Пользователя ИИ в студента',
       `ai-user-to-student:${userId}`,
     );
   }

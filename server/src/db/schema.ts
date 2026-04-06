@@ -42,7 +42,7 @@ export const userRoles = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['admin', 'student', 'ai_user'] }).notNull().default('student'),
+    role: text('role', { enum: ['admin', 'student_14', 'student_21', 'ai_user'] }).notNull().default('ai_user'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('user_roles_user_id_role_idx').on(t.userId, t.role)]

@@ -7,6 +7,7 @@ import { hashPassword } from '../lib/auth.js';
 import { setUserRoleWithStudentBonus } from '../lib/student-role-bonus.js';
 import { ensureBalanceRow, getBalance, setBalanceByAdmin } from '../lib/billing.js';
 import { getTokenRate, tokensToRub } from '../lib/referrals.js';
+import { applyAdminRoleAssignment } from '../lib/course-access.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Admin: get all users (with progress and invitation code comment)
@@ -41,7 +42,7 @@ export async function adminRoutes(app: FastifyInstance) {
         name: u.name,
         is_blocked: u.isBlocked,
         blocked_at: u.blockedAt,
-        role: roleMap[u.id] || 'student',
+        role: roleMap[u.id] || 'ai_user',
         balance: balanceMap.get(u.id) ?? 0,
         balanceTokens: Math.round((balanceMap.get(u.id) ?? 0) * tokenRate),
         completed_lessons: prog.completed,
@@ -108,17 +109,17 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // Admin: set user role
-  app.post<{ Body: { userId: string; role: 'admin' | 'student' | 'ai_user' } }>('/admin/set-role', async (req, reply) => {
+  app.post<{ Body: { userId: string; role: 'admin' | 'student_14' | 'student_21' | 'ai_user' } }>('/admin/set-role', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload || payload.role !== 'admin') {
       return reply.status(403).send({ error: 'Требуются права администратора' });
     }
     const { userId, role } = req.body || {};
-    if (!userId || !role || !['admin', 'student', 'ai_user'].includes(role)) {
-      return reply.status(400).send({ error: 'userId и role (admin|student|ai_user) обязательны' });
+    if (!userId || !role || !['admin', 'student_14', 'student_21', 'ai_user'].includes(role)) {
+      return reply.status(400).send({ error: 'userId и role (admin|student_14|student_21|ai_user) обязательны' });
     }
     try {
-      const result = await setUserRoleWithStudentBonus(userId, role);
+      const result = await applyAdminRoleAssignment(userId, role);
       return reply.send({ success: true, role: result.role, bonusAwardedTokens: result.bonusAwardedTokens });
     } catch (error) {
       return reply.status(400).send({ error: error instanceof Error ? error.message : 'Не удалось изменить роль пользователя' });

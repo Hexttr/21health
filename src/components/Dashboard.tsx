@@ -66,7 +66,10 @@ export function Dashboard() {
   const progressPercentage = isProgressLoading ? 0 : getProgressPercentage();
   const selectedLesson = selectedLessonId ? getLessonById(selectedLessonId) : null;
   const isDataLoading = isLessonsLoading || isProgressLoading;
-  const grantedLessons = isFullCourseMode ? 21 : access?.grantedLessons ?? (user?.role === 'student' ? 21 : 0);
+  const grantedLessons = isFullCourseMode
+    ? 21
+    : access?.grantedLessons
+      ?? (user?.role === 'student_21' ? 21 : user?.role === 'student_14' ? 14 : 0);
   const isPreviewOnly = !isFullCourseMode && user?.role === 'ai_user';
 
   const allLessons = courseData.flatMap(week => week.lessons);

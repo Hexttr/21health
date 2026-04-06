@@ -3,8 +3,11 @@ import { db } from '../db/index.js';
 import { courseAccess, courseOrders, courses, userRoles } from '../db/schema.js';
 import { setUserRoleWithStudentBonus } from './student-role-bonus.js';
 
+type StoredUserRole = 'admin' | 'student' | 'student_14' | 'student_21' | 'ai_user';
+export type AppRole = 'admin' | 'student_14' | 'student_21' | 'ai_user';
+
 export interface EffectiveCourseAccess {
-  role: 'admin' | 'student' | 'ai_user';
+  role: AppRole;
   courseCode: string | null;
   courseTitle: string | null;
   grantedLessons: number;
@@ -12,9 +15,26 @@ export interface EffectiveCourseAccess {
   canUpgradeTo21: boolean;
 }
 
-export async function getUserRole(userId: string): Promise<'admin' | 'student' | 'ai_user'> {
+function normalizeRole(role: StoredUserRole | null | undefined): AppRole {
+  if (role === 'student') {
+    return 'student_21';
+  }
+  return role ?? 'ai_user';
+}
+
+function resolveStudentRoleByLessons(grantedLessons: number): AppRole {
+  if (grantedLessons >= 21) {
+    return 'student_21';
+  }
+  if (grantedLessons > 0) {
+    return 'student_14';
+  }
+  return 'ai_user';
+}
+
+export async function getUserRole(userId: string): Promise<AppRole> {
   const [roleRow] = await db.select().from(userRoles).where(eq(userRoles.userId, userId));
-  return (roleRow?.role as 'admin' | 'student' | 'ai_user') || 'ai_user';
+  return normalizeRole(roleRow?.role as StoredUserRole | undefined);
 }
 
 export async function getCourseByCode(code: string) {
@@ -53,8 +73,9 @@ export async function getEffectiveCourseAccess(userId: string): Promise<Effectiv
     .limit(1);
 
   if (accessRow) {
+    const derivedRole = resolveStudentRoleByLessons(accessRow.grantedLessons);
     return {
-      role,
+      role: derivedRole,
       courseCode: accessRow.courseCode,
       courseTitle: accessRow.courseTitle,
       grantedLessons: accessRow.grantedLessons,
@@ -64,7 +85,7 @@ export async function getEffectiveCourseAccess(userId: string): Promise<Effectiv
   }
 
   // Compatibility for legacy students created before course entitlements existed.
-  if (role === 'student') {
+  if (role === 'student_21') {
     const fullCourse = await getCourseByCode('course_21');
     return {
       role,
@@ -73,6 +94,18 @@ export async function getEffectiveCourseAccess(userId: string): Promise<Effectiv
       grantedLessons: 21,
       hasCourseAccess: true,
       canUpgradeTo21: false,
+    };
+  }
+
+  if (role === 'student_14') {
+    const introCourse = await getCourseByCode('course_14');
+    return {
+      role,
+      courseCode: introCourse?.code ?? 'course_14',
+      courseTitle: introCourse?.title ?? 'Курс — 14 дней',
+      grantedLessons: 14,
+      hasCourseAccess: true,
+      canUpgradeTo21: true,
     };
   }
 
@@ -86,17 +119,68 @@ export async function getEffectiveCourseAccess(userId: string): Promise<Effectiv
   };
 }
 
-export async function syncUserRoleWithAccess(userId: string): Promise<'admin' | 'student' | 'ai_user'> {
+export async function syncUserRoleWithAccess(userId: string): Promise<AppRole> {
   const currentRole = await getUserRole(userId);
   if (currentRole === 'admin') {
     return currentRole;
   }
 
   const access = await getEffectiveCourseAccess(userId);
-  const nextRole: 'student' | 'ai_user' = access.hasCourseAccess ? 'student' : 'ai_user';
+  const nextRole = resolveStudentRoleByLessons(access.grantedLessons);
   await setUserRoleWithStudentBonus(userId, nextRole);
 
   return nextRole;
+}
+
+export async function applyAdminRoleAssignment(userId: string, role: AppRole): Promise<{ role: AppRole; bonusAwardedTokens: number }> {
+  if (role === 'admin') {
+    return setUserRoleWithStudentBonus(userId, role);
+  }
+
+  if (role === 'ai_user') {
+    const [existingAccess] = await db.select().from(courseAccess).where(eq(courseAccess.userId, userId));
+    if (existingAccess) {
+      await db
+        .update(courseAccess)
+        .set({
+          status: 'revoked',
+          updatedAt: new Date(),
+        })
+        .where(eq(courseAccess.id, existingAccess.id));
+    }
+    return setUserRoleWithStudentBonus(userId, 'ai_user');
+  }
+
+  const targetCourseCode = role === 'student_21' ? 'course_21' : 'course_14';
+  const targetCourse = await getCourseByCode(targetCourseCode);
+  if (!targetCourse) {
+    throw new Error(`Курс ${targetCourseCode} не найден`);
+  }
+
+  const [existingAccess] = await db.select().from(courseAccess).where(eq(courseAccess.userId, userId));
+  if (existingAccess) {
+    await db
+      .update(courseAccess)
+      .set({
+        courseId: targetCourse.id,
+        grantedLessons: role === 'student_21' ? 21 : 14,
+        source: 'admin',
+        status: 'active',
+        updatedAt: new Date(),
+      })
+      .where(eq(courseAccess.id, existingAccess.id));
+  } else {
+    await db.insert(courseAccess).values({
+      userId,
+      courseId: targetCourse.id,
+      grantedLessons: role === 'student_21' ? 21 : 14,
+      source: 'admin',
+      status: 'active',
+      orderId: null,
+    });
+  }
+
+  return setUserRoleWithStudentBonus(userId, role);
 }
 
 interface GrantCourseAccessInput {

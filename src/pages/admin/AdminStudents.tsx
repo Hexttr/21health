@@ -39,11 +39,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+type AppRole = 'admin' | 'student_14' | 'student_21' | 'ai_user';
+
 interface StudentProgress {
   user_id: string;
   email: string;
   name: string;
-  role: 'admin' | 'student' | 'ai_user';
+  role: AppRole;
   balance: number;
   balanceTokens: number;
   completed_lessons: number;
@@ -76,6 +78,13 @@ export default function AdminStudents() {
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<StudentProgress | null>(null);
 
+  const getRoleLabel = (role: AppRole) => {
+    if (role === 'admin') return 'Админ';
+    if (role === 'student_21') return 'Студент-21';
+    if (role === 'student_14') return 'Студент-14';
+    return 'Пользователь ИИ';
+  };
+
   useEffect(() => {
     loadStudents();
   }, []);
@@ -90,13 +99,13 @@ export default function AdminStudents() {
     setLoadingStudents(true);
     try {
       const data = await api<Array<{
-        user_id: string; email: string; name: string; role: 'admin' | 'student' | 'ai_user';
+        user_id: string; email: string; name: string; role: AppRole;
         balance: number; balanceTokens: number;
         completed_lessons: number; quiz_completed: number;
         invitation_code_comment: string | null; is_blocked: boolean;
       }>>('/admin/users');
       const studentData: StudentProgress[] = data.map((u) => ({
-        user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'student',
+        user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'ai_user',
         balance: u.balance ?? 0,
         balanceTokens: u.balanceTokens ?? 0,
         completed_lessons: u.completed_lessons, quiz_completed: u.quiz_completed,
@@ -144,10 +153,10 @@ export default function AdminStudents() {
     setEditStudent(student); setEditedName(student.name); setEditNameDialogOpen(true);
   };
 
-  const handleSetRole = async (userId: string, role: 'admin' | 'student' | 'ai_user') => {
+  const handleSetRole = async (userId: string, role: AppRole) => {
     setChangingRoleFor(userId);
     try {
-      const response = await api<{ success: true; role: 'admin' | 'student' | 'ai_user'; bonusAwardedTokens?: number }>('/admin/set-role', {
+      const response = await api<{ success: true; role: AppRole; bonusAwardedTokens?: number }>('/admin/set-role', {
         method: 'POST',
         body: { userId, role },
       });
@@ -391,7 +400,7 @@ export default function AdminStudents() {
                         Заблокирован
                       </span>
                     )}
-                    {student.invitation_code_comment && student.role === 'student' && student.invitation_code_comment !== 'Первый админ' && (
+                    {student.invitation_code_comment && (student.role === 'student_14' || student.role === 'student_21') && student.invitation_code_comment !== 'Первый админ' && (
                       <span className="text-xs px-2 py-0.5 bg-muted/50 text-muted-foreground rounded-full font-medium flex-shrink-0">
                         {student.invitation_code_comment}
                       </span>
@@ -405,16 +414,17 @@ export default function AdminStudents() {
                   <span className="text-xs text-muted-foreground sm:hidden">Роль:</span>
                   <Select
                     value={student.role}
-                    onValueChange={(v) => handleSetRole(student.user_id, v as 'admin' | 'student' | 'ai_user')}
+                    onValueChange={(v) => handleSetRole(student.user_id, v as AppRole)}
                     disabled={changingRoleFor === student.user_id}
                   >
                     <SelectTrigger className="w-full sm:w-[160px] h-8 rounded-lg border-border/50 bg-secondary/30 text-xs font-medium gap-1.5">
                       {changingRoleFor === student.user_id && <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />}
-                      <SelectValue />
+                      <SelectValue>{getRoleLabel(student.role)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       <SelectItem value="admin">Админ</SelectItem>
-                      <SelectItem value="student">Студент</SelectItem>
+                      <SelectItem value="student_21">Студент-21</SelectItem>
+                      <SelectItem value="student_14">Студент-14</SelectItem>
                       <SelectItem value="ai_user">Пользователь ИИ</SelectItem>
                     </SelectContent>
                   </Select>
