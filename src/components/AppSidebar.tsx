@@ -1,10 +1,7 @@
-import { Users, Ticket, Play, ClipboardList, LogOut, BookOpen, X, Trash2, DollarSign, Sparkles, Shield, MessageCircle, Gift } from "lucide-react";
+import { Users, Play, LogOut, BookOpen, X, Shield, MessageCircle, Bot } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useChatContext } from "@/contexts/ChatContext";
 import { useProgress } from "@/contexts/ProgressContext";
-import { BalanceWidget } from "@/components/BalanceWidget";
-import { aiTools, getAIToolBadge, type AIToolConfig } from "@/lib/ai-tools";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -26,20 +23,13 @@ const adminItems = [
   { title: "Уроки", url: "/admin/lessons", icon: BookOpen },
   { title: "Практ. материалы", url: "/admin/materials", icon: Play },
   { title: "Студенты", url: "/admin/students", icon: Users },
-  { title: "Пригл. коды", url: "/admin/codes", icon: Ticket },
-  { title: "Лист ожидания", url: "/admin/waitlist", icon: ClipboardList },
   { title: "Отзывы", url: "/admin/testimonials", icon: MessageCircle },
-  { title: "Биллинг и модели", url: "/admin/billing", icon: DollarSign },
-];
-
-const memberItems = [
-  { title: "Реферальная программа", url: "/referral-program", icon: Gift },
+  { title: "AI-модели", url: "/admin/ai", icon: Bot },
 ];
 
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
   const { isAdmin, user, signOut } = useAuth();
-  const chatContext = useChatContext();
   const { getCompletedCount, getProgressPercentage } = useProgress();
   const location = useLocation();
   const navigate = useNavigate();
@@ -52,86 +42,12 @@ export function AppSidebar() {
 
   const completedCount = getCompletedCount();
   const progressPercentage = getProgressPercentage();
-  const freeToolItems = aiTools.filter((item) => item.access === 'free');
-  const paidToolItems = aiTools.filter((item) => item.access === 'paid');
 
   const getMenuButtonClass = (isActive: boolean) => cn(
     "h-10 rounded-xl border px-2.5 transition-all duration-200",
     isActive
       ? "border-primary/15 bg-background/92 text-foreground shadow-xs"
       : "border-transparent text-foreground/90 hover:border-border/70 hover:bg-background/72 hover:text-foreground"
-  );
-
-  const renderToolIcon = (item: AIToolConfig, isActive: boolean) => {
-    if (item.icon) {
-      return (
-        <span className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border transition-colors",
-          isActive
-            ? "border-primary/15 bg-primary/10"
-            : "border-border/40 bg-background/80"
-        )}>
-          <img src={item.icon} alt="" className="w-full h-full object-contain" />
-        </span>
-      );
-    }
-
-    return (
-      <span className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border text-[13px] transition-colors",
-        isActive
-          ? "border-primary/15 bg-primary/10"
-          : "border-border/40 bg-background/80"
-      )}>
-        {item.iconEmoji || '•'}
-      </span>
-    );
-  };
-
-  const renderToolMenu = (items: AIToolConfig[]) => (
-    <SidebarMenu className="gap-1.5">
-      {items.map((item) => {
-        const isActive = location.pathname === item.url;
-        const showTrash = !collapsed && isActive && item.hasChat && item.modelPath;
-
-        return (
-          <SidebarMenuItem key={item.title}>
-            <div className="flex items-center gap-1 w-full group/item">
-              <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className={cn("flex-1", getMenuButtonClass(isActive))}>
-                <NavLink
-                  to={item.url}
-                  className="flex items-center gap-3"
-                  onClick={() => setOpenMobile(false)}
-                >
-                  {renderToolIcon(item, isActive)}
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="font-medium truncate">{item.title}</span>
-                    {!collapsed && (
-                      <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-[0.14em] opacity-85 ${getAIToolBadge(item.access)}`}>
-                        {item.access === 'free' ? 'free' : 'paid'}
-                      </span>
-                    )}
-                  </div>
-                </NavLink>
-              </SidebarMenuButton>
-              {showTrash && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    chatContext?.clearChat(item.modelPath!);
-                  }}
-                  className="opacity-60 hover:opacity-100 hover:text-destructive p-1.5 rounded-md transition-colors"
-                  title="Очистить чат"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </SidebarMenuItem>
-        );
-      })}
-    </SidebarMenu>
   );
 
   return (
@@ -163,8 +79,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
-        {/* ── Progress pill (expanded) — скрыт для ai_user ── */}
-        {!collapsed && user?.role !== 'ai_user' && (
+        {!collapsed && (
           <div className="px-3 pb-3">
             <button onClick={goHome} className="w-full text-left p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors cursor-pointer" style={{ background: 'hsl(263 52% 50% / 0.07)' }}>
               <div className="flex items-center justify-between mb-2">
@@ -181,94 +96,6 @@ export function AppSidebar() {
             </button>
           </div>
         )}
-
-        {/* ── Balance widget ── */}
-        {!collapsed && (
-          <div className="px-3 pb-3">
-            <BalanceWidget />
-          </div>
-        )}
-
-        {user && (
-          <SidebarGroup className={collapsed ? "px-2 pb-2 pt-0" : "px-3 pb-3 pt-0"}>
-            {collapsed ? (
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-1.5">
-                  {memberItems.map((item) => {
-                    const isActive = location.pathname === item.url;
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={isActive} tooltip={item.title} className={getMenuButtonClass(isActive)}>
-                          <NavLink to={item.url} className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
-                            <span className={cn(
-                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors",
-                              isActive
-                                ? "border-primary/15 bg-primary/10 text-primary"
-                                : "border-border/40 bg-background/80 text-muted-foreground"
-                            )}>
-                              <item.icon className="h-4.5 w-4.5" style={{ width: '18px', height: '18px' }} />
-                            </span>
-                            <span className="font-medium">{item.title}</span>
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            ) : (
-              <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 shadow-xs">
-                <NavLink
-                  to="/referral-program"
-                  onClick={() => setOpenMobile(false)}
-                  className="flex items-center gap-3 rounded-lg px-1 transition-colors hover:text-foreground/90"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
-                    <Gift className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-foreground">Реферальная программа</div>
-                    <div className="text-[10px] text-muted-foreground">Ссылка и бонусы</div>
-                  </div>
-                </NavLink>
-              </div>
-            )}
-          </SidebarGroup>
-        )}
-
-        {/* ── AI Tools ── */}
-        <SidebarGroup className={collapsed ? "px-2 pb-2 pt-0" : "px-3 pb-3 pt-0"}>
-          {collapsed ? (
-            <SidebarGroupContent>
-              {renderToolMenu([...freeToolItems, ...paidToolItems])}
-            </SidebarGroupContent>
-          ) : (
-            <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 shadow-xs">
-              <SidebarGroupLabel className="h-auto px-0 pb-0 pt-0">
-                <div className="w-full">
-                  <NavLink
-                    to="/ai"
-                    onClick={() => setOpenMobile(false)}
-                    className="flex items-center gap-3 rounded-lg px-1 transition-colors hover:text-foreground/90"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-foreground">Инструменты ИИ</div>
-                      <div className="text-[10px] text-muted-foreground">Модели и сервисы</div>
-                    </div>
-                  </NavLink>
-                  <div className="mt-3 h-px bg-border/70" />
-                </div>
-              </SidebarGroupLabel>
-              <SidebarGroupContent className="pt-3">
-                {freeToolItems.length > 0 && renderToolMenu(freeToolItems)}
-                {paidToolItems.length > 0 && renderToolMenu(paidToolItems)}
-              </SidebarGroupContent>
-            </div>
-          )}
-        </SidebarGroup>
 
         {/* ── Admin ── */}
         {isAdmin && (

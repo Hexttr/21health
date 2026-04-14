@@ -4,40 +4,22 @@ import { eq, and, sql, gte } from 'drizzle-orm';
 import { getAllowedPlatformSetting } from './platform-settings.js';
 
 export async function getSetting(key: string): Promise<string | null> {
-  if (
-    key === 'markup_percent' ||
-    key === 'daily_free_requests' ||
-    key === 'min_topup_amount' ||
-    key === 'max_topup_amount' ||
-    key === 'free_for_admins' ||
-    key === 'analytics_active_user_daily_requests' ||
-    key === 'referral_signup_bonus_tokens' ||
-    key === 'referral_course_purchase_bonus_tokens' ||
-    key === 'ai_user_to_student_bonus_tokens' ||
-    key === 'token_exchange_rate_rub_to_tokens' ||
-    key === 'course_14_price_rub' ||
-    key === 'course_21_price_rub' ||
-    key === 'course_21_upgrade_price_rub' ||
-    key === 'phone_verification_required_for_referrals'
-  ) {
+  if (key === 'ai_quiz_model_id') {
     return getAllowedPlatformSetting(key);
   }
   return null;
 }
 
 export async function getMarkupPercent(): Promise<number> {
-  const val = await getSetting('markup_percent');
-  return val ? parseFloat(val) : 50;
+  return 0;
 }
 
 export async function getDailyFreeLimit(): Promise<number> {
-  const val = await getSetting('daily_free_requests');
-  return val ? parseInt(val, 10) : 10;
+  return Number.MAX_SAFE_INTEGER;
 }
 
 export async function getFreeForAdmins(): Promise<boolean> {
-  const val = await getSetting('free_for_admins');
-  return val === '1' || val?.toLowerCase() === 'true';
+  return true;
 }
 
 export async function getBalance(userId: string): Promise<number> {

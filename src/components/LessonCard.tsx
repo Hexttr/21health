@@ -7,9 +7,8 @@ interface LessonCardProps {
   lesson: Lesson;
   onClick: () => void;
   style?: React.CSSProperties;
-  isPublished?: boolean;
   isAccessible?: boolean;
-  lockReason?: 'unpublished' | 'previous_quiz_incomplete' | 'course_access_required' | 'upgrade_required' | null;
+  lockReason?: 'unpublished' | 'previous_quiz_incomplete' | null;
   isDataLoading?: boolean;
 }
 
@@ -17,7 +16,6 @@ export function LessonCard({
   lesson,
   onClick,
   style,
-  isPublished = false,
   isAccessible = false,
   lockReason = null,
   isDataLoading = false,
@@ -30,11 +28,7 @@ export function LessonCard({
   const isLocked = !isDataLoading && !isAccessible;
   const lockLabel = lockReason === 'previous_quiz_incomplete'
     ? 'Сначала предыдущий урок'
-    : lockReason === 'course_access_required'
-      ? 'Нужен доступ'
-      : lockReason === 'upgrade_required'
-        ? 'Нужен апгрейд'
-        : 'Скоро';
+    : 'Скоро';
 
   return (
     <button
@@ -70,7 +64,7 @@ export function LessonCard({
         ) : (
           <>
             <span className="font-serif font-semibold text-lg text-foreground group-hover:text-primary-foreground transition-colors">
-              {lesson.day}
+              {lesson.id}
             </span>
             {/* Play overlay on hover */}
             <div className="absolute inset-0 rounded-xl bg-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -92,7 +86,7 @@ export function LessonCard({
                 : 'bg-primary/10 text-primary'
             }
           `}>
-            День {lesson.day}
+            День {lesson.id}
           </span>
           {isLocked && (
             <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">

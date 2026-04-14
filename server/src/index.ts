@@ -12,16 +12,10 @@ import { authRoutes } from './routes/auth.js';
 import { lessonRoutes } from './routes/lessons.js';
 import { progressRoutes } from './routes/progress.js';
 import { materialsRoutes } from './routes/materials.js';
-import { waitlistRoutes } from './routes/waitlist.js';
 import { testimonialsRoutes } from './routes/testimonials.js';
-import { codesRoutes } from './routes/codes.js';
 import { adminRoutes } from './routes/admin.js';
-import { referralsRoutes } from './routes/referrals.js';
 import { aiRoutes } from './routes/ai.js';
-import { aiAttachmentsRoutes } from './routes/ai-attachments.js';
 import { aiModelsRoutes } from './routes/ai-models.js';
-import { billingRoutes } from './routes/billing.js';
-import { courseCommerceRoutes } from './routes/course-commerce.js';
 import { db } from './db/index.js';
 import { lessonContent, practicalMaterials } from './db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -44,16 +38,10 @@ async function main() {
   await app.register(lessonRoutes, { prefix: '/api' });
   await app.register(progressRoutes, { prefix: '/api' });
   await app.register(materialsRoutes, { prefix: '/api' });
-  await app.register(waitlistRoutes, { prefix: '/api' });
   await app.register(testimonialsRoutes, { prefix: '/api' });
-  await app.register(codesRoutes, { prefix: '/api' });
   await app.register(adminRoutes, { prefix: '/api' });
-  await app.register(referralsRoutes, { prefix: '/api' });
   await app.register(aiRoutes, { prefix: '/api' });
-  await app.register(aiAttachmentsRoutes, { prefix: '/api' });
   await app.register(aiModelsRoutes, { prefix: '/api' });
-  await app.register(billingRoutes, { prefix: '/api' });
-  await app.register(courseCommerceRoutes, { prefix: '/api' });
 
   // Upload PDF for lesson
   app.post('/api/admin/lessons/upload-pdf', async (req, reply) => {

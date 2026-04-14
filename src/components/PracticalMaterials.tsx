@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, getUploadUrl } from '@/api/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Loader2, ExternalLink, Lock } from 'lucide-react';
+import { Play, Loader2, ExternalLink } from 'lucide-react';
 
 interface PracticalMaterial {
   id: string;
@@ -9,7 +9,6 @@ interface PracticalMaterial {
   description: string | null;
   video_url: string;
   preview_url?: string | null;
-  locked?: boolean;
 }
 
 export function PracticalMaterials() {
@@ -50,7 +49,7 @@ export function PracticalMaterials() {
 
   const loadMaterials = async () => {
     try {
-      const data = await api<Array<{ id: string; title: string; description: string | null; videoUrl: string; previewUrl?: string | null; locked?: boolean }>>('/materials');
+      const data = await api<Array<{ id: string; title: string; description: string | null; videoUrl: string; previewUrl?: string | null }>>('/materials');
       setMaterials((data || []).map(m => ({ ...m, video_url: m.videoUrl, preview_url: m.previewUrl })));
     } catch (error: unknown) {
       console.error('[PracticalMaterials] Error:', error);
@@ -124,16 +123,13 @@ export function PracticalMaterials() {
             const embedUrl = getEmbedUrl(material.video_url);
             const previewUrl = material.preview_url ? (material.preview_url.startsWith('http') ? material.preview_url : getUploadUrl(material.preview_url)) : getPreviewUrl(material.video_url);
             const isSelected = selectedMaterial?.id === material.id;
-            const isLocked = Boolean(material.locked);
             return (
               <button
                 key={material.id}
                 type="button"
-                onClick={() => !isLocked && embedUrl && (isSelected ? closePlayer() : openPlayer(material))}
+                onClick={() => embedUrl && (isSelected ? closePlayer() : openPlayer(material))}
                 className={`group text-left rounded-2xl overflow-hidden transition-all focus-ring ${
-                  isLocked
-                    ? 'cursor-not-allowed opacity-80 shadow-soft'
-                    : isSelected ? 'ring-2 ring-primary shadow-lg' : 'shadow-soft hover:shadow-medium'
+                  isSelected ? 'ring-2 ring-primary shadow-lg' : 'shadow-soft hover:shadow-medium'
                 }`}
               >
                 <div className="aspect-video bg-muted relative overflow-hidden">
@@ -142,21 +138,15 @@ export function PracticalMaterials() {
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-secondary/50 to-muted" />
                   )}
-                  <div className={`absolute inset-0 flex items-center justify-center transition-colors ${isLocked ? 'bg-black/35' : 'bg-black/0 group-hover:bg-black/30'}`}>
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/90 transition-transform ${isLocked ? 'bg-white/20' : 'bg-primary/90 group-hover:scale-110 opacity-90 group-hover:opacity-100'}`}>
-                      {isLocked ? (
-                        <Lock className="w-6 h-6 text-white" />
-                      ) : (
-                        <Play className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" />
-                      )}
+                  <div className="absolute inset-0 flex items-center justify-center transition-colors bg-black/0 group-hover:bg-black/30">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/90 transition-transform bg-primary/90 group-hover:scale-110 opacity-90 group-hover:opacity-100">
+                      <Play className="w-6 h-6 text-primary-foreground ml-1" fill="currentColor" />
                     </div>
                   </div>
                 </div>
                 <div className="p-3 sm:p-4 bg-card">
                   <p className="text-sm font-medium text-foreground line-clamp-2">{material.title}</p>
-                  {isLocked ? (
-                    <span className="text-xs text-muted-foreground mt-1 block">Доступно после покупки курса</span>
-                  ) : embedUrl ? (
+                  {embedUrl ? (
                     <span className="text-xs text-muted-foreground mt-1 block">Нажмите, чтобы смотреть</span>
                   ) : (
                     <a

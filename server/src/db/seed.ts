@@ -1,6 +1,5 @@
 /**
- * Seed script: creates first invitation code, optionally first admin user,
- * and seeds lesson_content with the 21-day course from courseData.
+ * Seed script: creates first admin user and seeds lesson_content.
  */
 import { config } from 'dotenv';
 import { resolve, dirname } from 'path';
@@ -10,33 +9,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../.env') });
 
 import { db } from './index.js';
-import { invitationCodes, users, userRoles, lessonContent } from './schema.js';
-import { eq } from 'drizzle-orm';
+import { users, userRoles, lessonContent } from './schema.js';
 import { hashPassword } from '../lib/auth.js';
 import { lessonSeeds } from '../data/courseSeed.js';
 
 async function seed() {
-  const existingCodes = await db.select().from(invitationCodes);
-  if (existingCodes.length === 0) {
-    const [code] = await db
-      .insert(invitationCodes)
-      .values({ code: 'ADMIN2025', comment: 'Первый админ', isActive: true })
-      .returning();
-    console.log('Created invitation code:', code?.code);
-  } else {
-    console.log('Invitation codes already exist');
-  }
-
   const existingUsers = await db.select().from(users);
   if (existingUsers.length === 0) {
-    let [code] = await db.select().from(invitationCodes).where(eq(invitationCodes.code, 'ADMIN2025'));
-    if (!code) {
-      [code] = await db.insert(invitationCodes).values({ code: 'ADMIN2025', comment: 'Первый админ', isActive: true }).returning();
-    }
-    if (!code) {
-      console.error('Failed to get/create invitation code');
-      process.exit(1);
-    }
     const passwordHash = await hashPassword('admin123');
     const [user] = await db
       .insert(users)
@@ -44,7 +23,6 @@ async function seed() {
         email: 'admin@example.com',
         passwordHash,
         name: 'Администратор',
-        invitationCodeId: code.id,
       })
       .returning();
     if (user) {

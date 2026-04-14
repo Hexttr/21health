@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Settings, Database, Save, Plus, Trash2, Loader2, DollarSign, KeyRound } from 'lucide-react';
+import { Settings, Database, Save, Plus, Trash2, Loader2, Bot, KeyRound } from 'lucide-react';
 import { invalidateModelsCache } from '@/components/ModelSelector';
 
 interface AIProvider {
@@ -58,20 +58,7 @@ interface ProviderKeyStatus {
 }
 
 const SETTINGS_FIELDS = [
-  { key: 'markup_percent', label: 'Наценка на AI-запросы (%)', hint: 'Процент наценки поверх базовой стоимости', type: 'number' as const },
-  { key: 'daily_free_requests', label: 'Бесплатных запросов в день', hint: 'Количество бесплатных AI-запросов для каждого пользователя', type: 'number' as const },
-  { key: 'min_topup_amount', label: 'Мин. сумма пополнения (₽)', hint: '', type: 'number' as const },
-  { key: 'max_topup_amount', label: 'Макс. сумма пополнения (₽)', hint: '', type: 'number' as const },
-  { key: 'free_for_admins', label: 'Бесплатно для администраторов', hint: 'Админы не тратят баланс при использовании AI (чат, изображения, квиз)', type: 'boolean' as const },
-  { key: 'analytics_active_user_daily_requests', label: 'Порог активного пользователя за 24 часа', hint: 'Если пользователь сделал не меньше этого числа AI-запросов за последние 24 часа, он считается активным в аналитике', type: 'number' as const },
-  { key: 'token_exchange_rate_rub_to_tokens', label: 'Курс токенов (сколько токенов за 1 ₽)', hint: 'Например, 10 означает что 50 ₽ отображаются как 500 Tokens', type: 'number' as const },
-  { key: 'referral_signup_bonus_tokens', label: 'Бонус за регистрацию по реферальной ссылке (Tokens)', hint: 'Начисляется и пригласившему, и приглашенному после подтверждения телефона', type: 'number' as const },
-  { key: 'referral_course_purchase_bonus_tokens', label: 'Бонус за покупку курса приглашенным (Tokens)', hint: 'Начисляется пригласившему после оплаты курса приглашенным пользователем', type: 'number' as const },
-  { key: 'ai_user_to_student_bonus_tokens', label: 'Бонус за первый переход из Пользователя ИИ в Студента (Токенов)', hint: 'Разово начисляется пользователю при первом переходе из роли ai_user в student', type: 'number' as const },
-  { key: 'course_14_price_rub', label: 'Цена курса 14 дней (₽)', hint: 'Стоимость базового тарифа', type: 'number' as const },
-  { key: 'course_21_price_rub', label: 'Цена курса 21 день (₽)', hint: 'Стоимость полного курса', type: 'number' as const },
-  { key: 'course_21_upgrade_price_rub', label: 'Апгрейд с 14 до 21 дня (₽)', hint: 'Разница, которую пользователь платит при расширении доступа', type: 'number' as const },
-  { key: 'phone_verification_required_for_referrals', label: 'Требовать подтверждение телефона для рефералки', hint: 'Если включено, реферальная ссылка и бонусы активируются только после подтверждения номера', type: 'boolean' as const },
+  { key: 'ai_quiz_model_id', label: 'Модель AI-квиза', hint: 'Определяет модель для AI-тьютора и проверки уроков.', type: 'select' as const },
 ] as const;
 
 function ProviderCard({ provider, modelCount, onUpdate }: { provider: AIProvider; modelCount: number; onUpdate: () => void }) {
@@ -253,9 +240,8 @@ export default function AdminBilling() {
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [settings, setSettings] = useState<Settings>({});
-  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'settings' | 'models' | 'providers' | 'analytics'>('settings');
+  const [tab, setTab] = useState<'settings' | 'models' | 'providers'>('settings');
 
   useEffect(() => { loadAll(); }, []);
 
@@ -277,14 +263,9 @@ export default function AdminBilling() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProviders(), loadModels(), loadSettings(), loadAnalytics()]);
+      await Promise.all([loadProviders(), loadModels(), loadSettings()]);
     } catch (e) { toast.error('Ошибка загрузки'); }
     finally { setLoading(false); }
-  };
-
-  const loadAnalytics = async () => {
-    const data = await api<UsageSummary>('/admin/usage-summary');
-    setUsageSummary(data);
   };
 
   const saveSettings = async () => {
@@ -357,24 +338,24 @@ export default function AdminBilling() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
       <div className="md:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 bg-card/80 backdrop-blur-xl border-b border-border/50">
-        <SidebarTrigger /> <span className="font-semibold text-sm">Биллинг</span>
+        <SidebarTrigger /> <span className="font-semibold text-sm">AI-модели</span>
       </div>
 
       <div className="container mx-auto max-w-4xl px-4 py-6">
         <div className="mb-6 flex items-center gap-3">
-          <DollarSign className="w-6 h-6 text-primary" />
-          <h1 className="min-w-0 text-balance font-serif text-2xl font-semibold text-foreground">Биллинг и AI-модели</h1>
+          <Bot className="w-6 h-6 text-primary" />
+          <h1 className="min-w-0 text-balance font-serif text-2xl font-semibold text-foreground">AI-модели и провайдеры</h1>
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-border/60 bg-card/80 p-2 shadow-soft sm:flex sm:flex-wrap">
-          {(['settings', 'models', 'providers', 'analytics'] as const).map(t => (
+        <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-border/60 bg-card/80 p-2 shadow-soft">
+          {(['settings', 'models', 'providers'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`min-w-0 rounded-xl border px-3 py-2.5 text-center text-sm font-medium transition-colors ${tab === t ? 'border-primary bg-primary text-white shadow-sm' : 'border-border/70 bg-background/92 text-foreground shadow-xs hover:bg-secondary/70'}`}
             >
-              {t === 'settings' ? 'Настройки' : t === 'models' ? 'Модели' : t === 'providers' ? 'Провайдеры' : 'Аналитика'}
+              {t === 'settings' ? 'Квиз' : t === 'models' ? 'Модели' : 'Провайдеры'}
             </button>
           ))}
         </div>
@@ -384,54 +365,31 @@ export default function AdminBilling() {
           <div className="space-y-5 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-soft md:p-6">
             <div className="flex items-center gap-2 mb-2">
               <Settings className="w-5 h-5 text-primary" />
-              <h2 className="font-serif text-lg font-semibold">Настройки платформы</h2>
+              <h2 className="font-serif text-lg font-semibold">Настройки AI-квиза</h2>
             </div>
-            {[
-              ...SETTINGS_FIELDS,
-            ].map(({ key, label, hint, type }) => (
+            {SETTINGS_FIELDS.map(({ key, label, hint }) => (
               <div key={key}>
                 <label className="block text-sm font-medium text-foreground mb-1">{label}</label>
                 {hint && <p className="text-xs text-muted-foreground mb-2">{hint}</p>}
-                {type === 'boolean' ? (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={(settings[key] || '1') === '1'}
-                      onChange={(e) => setSettings({ ...settings, [key]: e.target.checked ? '1' : '0' })}
-                      className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                    />
-                    <span className="text-sm">Да</span>
-                  </label>
-                ) : (
-                  <input
-                    type="number"
-                    value={settings[key] || ''}
-                    onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
-                    className="h-10 w-full rounded-xl border border-border/60 bg-background/90 px-3 text-sm outline-none transition-colors focus:border-primary"
-                  />
-                )}
+                <select
+                  value={settings[key] || ''}
+                  onChange={(e) => setSettings({ ...settings, [key]: e.target.value })}
+                  className="h-10 w-full rounded-xl border border-border/60 bg-background/90 px-3 text-sm outline-none transition-colors focus:border-primary"
+                >
+                  <option value="">Автовыбор первой совместимой Gemini-модели</option>
+                  {quizModelOptions.map((model) => {
+                    const provider = providers.find((item) => item.id === model.providerId);
+                    return (
+                      <option key={model.id} value={model.id}>
+                        {model.displayName}{provider ? ` · ${provider.displayName}` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             ))}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Модель AI-квиза</label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Отдельная модель для AI-тьютора и проверки уроков. Рекомендуется выбрать активную Gemini-модель.
-              </p>
-              <select
-                value={settings.ai_quiz_model_id || ''}
-                onChange={(e) => setSettings({ ...settings, ai_quiz_model_id: e.target.value })}
-                className="h-10 w-full rounded-xl border border-border/60 bg-background/90 px-3 text-sm outline-none transition-colors focus:border-primary"
-              >
-                <option value="">Автовыбор первой совместимой Gemini-модели</option>
-                {quizModelOptions.map((model) => {
-                  const provider = providers.find((item) => item.id === model.providerId);
-                  return (
-                    <option key={model.id} value={model.id}>
-                      {model.displayName}{provider ? ` · ${provider.displayName}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
+            <div className="rounded-xl border border-border/60 bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+              Публичные AI-инструменты удалены. Здесь остались только настройки, нужные для AI-тьютора внутри уроков.
             </div>
             <Button onClick={saveSettings} className="gap-2 rounded-xl shadow-xs">
               <Save className="w-4 h-4" /> Сохранить настройки
@@ -554,74 +512,6 @@ export default function AdminBilling() {
             {providers.map((p) => (
               <ProviderCard key={p.id} provider={p} modelCount={models.filter(m => m.providerId === p.id).length} onUpdate={loadAll} />
             ))}
-          </div>
-        )}
-
-        {tab === 'analytics' && usageSummary && (
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: 'Запросов', value: usageSummary.overview.totalRequests },
-                { label: `Активных пользователей (>= ${usageSummary.activeUserThreshold} за ${usageSummary.activeUserWindowHours} ч)`, value: usageSummary.overview.activeUsers },
-                { label: 'Бесплатных запросов', value: usageSummary.overview.freeRequests },
-                { label: `Платная выручка за ${usageSummary.windowDays} дней`, value: `${Number(usageSummary.overview.totalRevenue).toFixed(2)} ₽` },
-              ].map((card) => (
-                <div key={card.label} className="bg-card rounded-2xl border border-border/50 shadow-soft p-5">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{card.label}</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="font-serif text-lg font-semibold">По типу запросов</h2>
-                  <Button size="sm" variant="outline" className="h-9 self-start rounded-xl border-border/70 bg-background/92 shadow-xs hover:bg-background sm:self-auto" onClick={loadAnalytics}>Обновить</Button>
-                </div>
-                <div className="space-y-3">
-                  {usageSummary.requestTypes.map((row) => (
-                    <div key={row.requestType} className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{row.requestType}</p>
-                        <p className="text-xs text-muted-foreground">{row.requests} запросов</p>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
-                <h2 className="font-serif text-lg font-semibold">По провайдерам</h2>
-                <div className="space-y-3">
-                  {usageSummary.providerStats.map((row) => (
-                    <div key={row.providerName} className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{row.providerName}</p>
-                        <p className="text-xs text-muted-foreground">{row.requests} запросов</p>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card rounded-2xl border border-border/50 shadow-soft p-5 space-y-4">
-              <h2 className="font-serif text-lg font-semibold">Топ инструментов и моделей</h2>
-              <div className="space-y-3">
-                {usageSummary.topModels.map((row, index) => (
-                  <div key={`${row.providerName}-${row.modelName}-${row.requestType}-${index}`} className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{row.modelName}</p>
-                      <p className="text-xs text-muted-foreground break-words">{row.providerName} · {row.requestType} · {row.requests} запросов</p>
-                    </div>
-                    <p className="text-sm font-semibold text-foreground">{Number(row.revenue).toFixed(2)} ₽</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
       </div>

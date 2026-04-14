@@ -14,9 +14,6 @@ export async function progressRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'Не авторизован' });
     }
     const access = await getEffectiveCourseAccess(payload.userId);
-    if (access.role === 'ai_user') {
-      return reply.send([]);
-    }
     const targetUserId = req.query.userId;
     const userId = targetUserId && access.role === 'admin' ? targetUserId : payload.userId;
     const rows = await db
@@ -36,15 +33,12 @@ export async function progressRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'Не авторизован' });
     }
     const access = await getEffectiveCourseAccess(payload.userId);
-    if (access.role === 'ai_user') {
-      return reply.status(403).send({ error: 'Доступ к урокам недоступен для этого типа аккаунта' });
-    }
     const { lessonId, completed, quizCompleted } = req.body || {};
     if (!lessonId || typeof lessonId !== 'number') {
       return reply.status(400).send({ error: 'lessonId обязателен' });
     }
     if (access.role !== 'admin' && lessonId > access.grantedLessons) {
-      return reply.status(403).send({ error: 'Для сохранения прогресса по этому уроку требуется более полный тариф курса' });
+      return reply.status(403).send({ error: 'Урок недоступен' });
     }
     const [existing] = await db
       .select()

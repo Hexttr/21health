@@ -51,7 +51,7 @@ export async function getLessonAccessState(
   }
 
   const access = await getEffectiveCourseAccess(userId);
-  if (access.role === 'ai_user' || lessonId > access.grantedLessons) {
+  if (lessonId > access.grantedLessons) {
     return {
       canAccess: false,
       reason: 'previous_quiz_incomplete',

@@ -6,7 +6,7 @@ import { getAuthFromRequest } from '../lib/auth.js';
 import { getEffectiveCourseAccess } from '../lib/course-access.js';
 
 export async function materialsRoutes(app: FastifyInstance) {
-  // Get published materials (authenticated, ai_user — нет доступа)
+  // Get published materials
   app.get('/materials', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload) {
@@ -26,13 +26,6 @@ export async function materialsRoutes(app: FastifyInstance) {
       seen.add(key);
       return true;
     });
-    if (access.role === 'ai_user' || !access.hasCourseAccess) {
-      return reply.send(unique.map((row) => ({
-        ...row,
-        videoUrl: '',
-        locked: true,
-      })));
-    }
     return reply.send(unique);
   });
 

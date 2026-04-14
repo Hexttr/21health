@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lesson, getWeekByLessonId } from '@/data/courseData';
+import { Lesson } from '@/data/courseData';
 import { useProgress } from '@/contexts/ProgressContext';
 import { api, getUploadUrl } from '@/api/client';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ interface LessonViewProps {
   onNavigateToLesson: (lessonId: number) => void;
   isLessonPublished: (lessonId: number) => boolean;
   canAccessLesson: (lessonId: number) => boolean;
-  getLessonLockReason: (lessonId: number) => 'unpublished' | 'previous_quiz_incomplete' | 'course_access_required' | 'upgrade_required' | null;
+  getLessonLockReason: (lessonId: number) => 'unpublished' | 'previous_quiz_incomplete' | null;
   courseViewMode?: CourseViewMode;
 }
 
@@ -108,7 +108,6 @@ export function LessonView({
   
   const completed = isLessonCompleted(lesson.id);
   const quizDone = isQuizCompleted(lesson.id);
-  const week = getWeekByLessonId(lesson.id);
   const isPublished = isLessonPublished(lesson.id);
   const isAccessible = canAccessLesson(lesson.id);
   const lockReason = getLessonLockReason(lesson.id);
@@ -164,11 +163,7 @@ export function LessonView({
   if (!isAccessible) {
     const lockMessage = lockReason === 'previous_quiz_incomplete'
       ? 'Сначала завершите AI-тест по предыдущему уроку, и следующий урок откроется автоматически.'
-      : lockReason === 'course_access_required'
-        ? 'Для открытия уроков нужен доступ к курсу. Вы можете посмотреть программу, но сами уроки и материалы откроются после покупки.'
-        : lockReason === 'upgrade_required'
-          ? 'Этот урок входит в расширенный тариф. Оформите апгрейд до 21 дня, чтобы продолжить обучение.'
-          : 'Этот урок ещё не опубликован. Пожалуйста, вернитесь позже или выберите другой урок.';
+      : 'Этот урок ещё не опубликован. Пожалуйста, вернитесь позже или выберите другой урок.';
 
     return (
       <div className="animate-fade-in-up">
@@ -280,13 +275,8 @@ export function LessonView({
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary bg-primary/10 px-3 py-1 rounded-lg">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              День {lesson.day}
+              День {lesson.id}
             </span>
-            {week && (
-              <span className="text-sm text-muted-foreground bg-secondary/50 px-3 py-1 rounded-lg">
-                Неделя {week.id}
-              </span>
-            )}
             {completed && (
               <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-success bg-success-soft px-3 py-1 rounded-lg">
                 <CheckCircle2 className="w-3.5 h-3.5" />

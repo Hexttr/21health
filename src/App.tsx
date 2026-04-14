@@ -8,32 +8,17 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProgressProvider } from "@/contexts/ProgressContext";
 import { ImpersonationProvider } from "@/contexts/ImpersonationContext";
-import { BalanceProvider } from "@/contexts/BalanceContext";
-import { ChatContextProvider } from "@/contexts/ChatContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppFooter } from "@/components/AppFooter";
 
 const Index = React.lazy(() => import("./pages/Index"));
-const AIToolsHome = React.lazy(() => import("./pages/AIToolsHome"));
-const ChatGPT = React.lazy(() => import("./pages/ChatGPT"));
-const Claude = React.lazy(() => import("./pages/Claude"));
-const Gemini = React.lazy(() => import("./pages/Gemini"));
-const Groq = React.lazy(() => import("./pages/Groq"));
-const EdgeTTS = React.lazy(() => import("./pages/EdgeTTS"));
-const NanoBanana = React.lazy(() => import("./pages/NanoBanana"));
 const NotFound = React.lazy(() => import("./pages/NotFound"));
 const AdminLessons = React.lazy(() => import("./pages/admin/AdminLessons"));
 const AdminMaterials = React.lazy(() => import("./pages/admin/AdminMaterials"));
 const AdminStudents = React.lazy(() => import("./pages/admin/AdminStudents"));
-const AdminCodes = React.lazy(() => import("./pages/admin/AdminCodes"));
-const AdminWaitlist = React.lazy(() => import("./pages/admin/AdminWaitlist"));
 const AdminBilling = React.lazy(() => import("./pages/admin/AdminBilling"));
 const AdminTestimonials = React.lazy(() => import("./pages/admin/AdminTestimonials"));
-const TopUp = React.lazy(() => import("./pages/TopUp"));
-const CourseAccessPage = React.lazy(() => import("./pages/CourseAccessPage"));
-const ReferralProgramPage = React.lazy(() => import("./pages/ReferralProgramPage"));
-const SocialAuthCallbackPage = React.lazy(() => import("./pages/SocialAuthCallbackPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,9 +42,6 @@ const RouteFallback = () => (
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-  const aiToolRoutes = ['/ai', '/chatgpt', '/claude', '/gemini', '/groq', '/edge-tts', '/nanobanana'];
-  const isAIToolRoute = aiToolRoutes.includes(location.pathname);
-  const hideFooter = isAIToolRoute;
 
   if (!isAuthenticated && !isLoading) {
     if (location.pathname !== "/") {
@@ -69,23 +51,21 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     return (
       <div className="min-h-screen flex w-full flex-col">
         <main className="flex-1 min-h-0 overflow-auto">{children}</main>
-        {!hideFooter && <AppFooter />}
+        <AppFooter />
       </div>
     );
   }
 
   return (
-    <ChatContextProvider>
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 relative min-w-0 flex flex-col" style={{ backgroundColor: 'hsl(248deg 100% 94.56%)' }}>
-          <div className={isAIToolRoute ? "flex-1 min-h-0" : "flex-1 min-h-0 overflow-auto"}>{children}</div>
-          {!hideFooter && <AppFooter />}
+          <div className="flex-1 min-h-0 overflow-auto">{children}</div>
+          <AppFooter />
         </main>
       </div>
     </SidebarProvider>
-    </ChatContextProvider>
   );
 };
 
@@ -109,7 +89,6 @@ const App = () => (
     <AuthProvider>
       <ImpersonationProvider>
         <ProgressProvider>
-          <BalanceProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -121,90 +100,6 @@ const App = () => (
                     element={
                       <AppLayout>
                         <Index />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/auth/vkid/callback"
-                    element={<SocialAuthCallbackPage />}
-                  />
-                  <Route
-                    path="/ai"
-                    element={
-                      <AppLayout>
-                        <AIToolsHome />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/chatgpt"
-                    element={
-                      <AppLayout>
-                        <ChatGPT />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/gemini"
-                    element={
-                      <AppLayout>
-                        <Gemini />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/claude"
-                    element={
-                      <AppLayout>
-                        <Claude />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/groq"
-                    element={
-                      <AppLayout>
-                        <Groq />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/edge-tts"
-                    element={
-                      <AppLayout>
-                        <EdgeTTS />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/nanobanana"
-                    element={
-                      <AppLayout>
-                        <NanoBanana />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/topup"
-                    element={
-                      <AppLayout>
-                        <TopUp />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/course-access"
-                    element={
-                      <AppLayout>
-                        <CourseAccessPage />
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/referral-program"
-                    element={
-                      <AppLayout>
-                        <ReferralProgramPage />
                       </AppLayout>
                     }
                   />
@@ -241,26 +136,6 @@ const App = () => (
                     }
                   />
                   <Route
-                    path="/admin/codes"
-                    element={
-                      <AppLayout>
-                        <AdminRoute>
-                          <AdminCodes />
-                        </AdminRoute>
-                      </AppLayout>
-                    }
-                  />
-                  <Route
-                    path="/admin/waitlist"
-                    element={
-                      <AppLayout>
-                        <AdminRoute>
-                          <AdminWaitlist />
-                        </AdminRoute>
-                      </AppLayout>
-                    }
-                  />
-                  <Route
                     path="/admin/testimonials"
                     element={
                       <AppLayout>
@@ -271,7 +146,7 @@ const App = () => (
                     }
                   />
                   <Route
-                    path="/admin/billing"
+                    path="/admin/ai"
                     element={
                       <AppLayout>
                         <AdminRoute>
@@ -286,7 +161,6 @@ const App = () => (
               </React.Suspense>
             </BrowserRouter>
           </TooltipProvider>
-          </BalanceProvider>
         </ProgressProvider>
       </ImpersonationProvider>
     </AuthProvider>

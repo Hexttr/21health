@@ -8,31 +8,14 @@ import {
   createUserFromAuthIdentity,
   findUserByEmail,
   loadAuthUserById,
-  validateAccessCode,
 } from '../lib/auth-accounts.js';
-import {
-  buildSocialCallbackErrorRedirect,
-  buildSocialCallbackSuccessRedirect,
-  buildVkStartRedirect,
-  handleVkCallbackAndCreateTicket,
-} from '../lib/social-auth/vkid.js';
-import { consumeSocialCompletionTicket } from '../lib/social-auth/store.js';
 
 export async function authRoutes(app: FastifyInstance) {
-  // Validate invitation code (public)
-  app.post<{
-    Body: { code: string };
-  }>('/auth/validate-code', async (req, reply) => {
-    const { code } = req.body || {};
-    const result = await validateAccessCode(code || '');
-    return reply.send(result);
-  });
-
   // Sign up
   app.post<{
-    Body: { email: string; password: string; name: string; accessCode?: string; invitationCode?: string; referralCode?: string; phone?: string };
+    Body: { email: string; password: string; name: string };
   }>('/auth/signup', async (req, reply) => {
-    const { email, password, name, accessCode, invitationCode, referralCode, phone } = req.body || {};
+    const { email, password, name } = req.body || {};
     if (!email?.trim() || !password || !name?.trim()) {
       return reply.status(400).send({ error: 'Заполните все поля' });
     }
@@ -44,10 +27,6 @@ export async function authRoutes(app: FastifyInstance) {
         email,
         password,
         name,
-        accessCode,
-        invitationCode,
-        referralCode,
-        phone,
       });
 
       const auth = await buildAuthSuccessForUserId(created.user.id);
@@ -57,60 +36,6 @@ export async function authRoutes(app: FastifyInstance) {
         error: error instanceof Error ? error.message : 'Ошибка создания пользователя',
       });
     }
-  });
-
-  app.get<{
-    Querystring: { mode?: 'login' | 'register'; accessCode?: string; provider?: 'vkid' | 'mail_ru' | 'ok_ru' };
-  }>('/auth/social/vkid/start', async (req, reply) => {
-    try {
-      const redirectUrl = buildVkStartRedirect({
-        mode: req.query.mode === 'register' ? 'register' : 'login',
-        accessCode: req.query.accessCode,
-        provider: req.query.provider,
-      });
-      return reply.redirect(redirectUrl);
-    } catch (error) {
-      return reply.redirect(buildSocialCallbackErrorRedirect(
-        error instanceof Error ? error.message : 'Не удалось запустить вход через VK ID'
-      ));
-    }
-  });
-
-  app.get<{
-    Querystring: {
-      payload?: string;
-      code?: string;
-      state?: string;
-      device_id?: string;
-      deviceId?: string;
-      error?: string;
-      error_description?: string;
-    };
-  }>('/auth/social/vkid/callback', async (req, reply) => {
-    try {
-      const ticket = await handleVkCallbackAndCreateTicket(req.query || {});
-      return reply.redirect(buildSocialCallbackSuccessRedirect(ticket));
-    } catch (error) {
-      return reply.redirect(buildSocialCallbackErrorRedirect(
-        error instanceof Error ? error.message : 'Не удалось завершить вход через VK ID'
-      ));
-    }
-  });
-
-  app.get<{
-    Querystring: { ticket?: string };
-  }>('/auth/social/complete', async (req, reply) => {
-    const ticket = req.query.ticket?.trim();
-    if (!ticket) {
-      return reply.status(400).send({ error: 'Требуется ticket авторизации' });
-    }
-
-    const auth = consumeSocialCompletionTicket(ticket);
-    if (!auth) {
-      return reply.status(400).send({ error: 'Сессия входа истекла. Попробуйте еще раз' });
-    }
-
-    return reply.send(auth);
   });
 
   // Sign in

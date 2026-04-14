@@ -25,10 +25,6 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
-  phone: text('phone').unique(),
-  phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
-  studentBonusGrantedAt: timestamp('student_bonus_granted_at', { withTimezone: true }),
-  invitationCodeId: uuid('invitation_code_id').references(() => invitationCodes.id),
   isBlocked: boolean('is_blocked').notNull().default(false),
   blockedAt: timestamp('blocked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -42,7 +38,7 @@ export const userRoles = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['admin', 'student_14', 'student_21', 'ai_user'] }).notNull().default('ai_user'),
+    role: text('role', { enum: ['admin', 'student'] }).notNull().default('student'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('user_roles_user_id_role_idx').on(t.userId, t.role)]

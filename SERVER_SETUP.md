@@ -1,4 +1,4 @@
-# Установка 21day-platform на сервер
+# Установка 21health на сервер
 
 > Подробная инструкция для автоматической установки ИИ-агентом или администратором сервера.
 
@@ -6,7 +6,7 @@
 
 ## 1. Описание проекта
 
-**21day-platform** — веб-платформа для 21-дневного курса по искусственному интеллекту для помогающих специалистов (психологи, коучи, тарологи и др.).
+**21health** — упрощённая веб-платформа для 21-дневного курса по искусственному интеллекту для помогающих специалистов.
 
 ### Технологический стек
 
@@ -15,7 +15,7 @@
 | Frontend | Vite, React 18, TypeScript, Tailwind CSS, shadcn/ui |
 | Backend | Node.js 18+, Fastify, Drizzle ORM |
 | База данных | PostgreSQL 16+ |
-| AI | Google Gemini API (чат, квиз-тьютор, генерация изображений) |
+| AI | Google Gemini API (AI-квиз внутри уроков) |
 
 ### Архитектура
 
@@ -26,7 +26,7 @@
 ### Структура проекта
 
 ```
-21day-platform/
+21health/
 ├── src/                    # Исходники фронтенда (React)
 ├── public/                 # Статические файлы (favicon и т.д.)
 ├── server/                 # Бэкенд (Fastify)
@@ -58,8 +58,8 @@
 ### Шаг 3.1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/Hexttr/21day-platform.git
-cd 21day-platform
+git clone https://github.com/Hexttr/21health.git
+cd 21health
 ```
 
 ### Шаг 3.2. Установка Node.js (если не установлен)
@@ -129,7 +129,7 @@ openssl rand -base64 32
 **Файл `.env` в корне** (для сборки фронтенда):
 
 ```bash
-cd /path/to/21day-platform
+cd /path/to/21health
 echo 'VITE_API_URL="/api"' > .env
 ```
 
@@ -157,14 +157,13 @@ npm run db:create
 # Применить миграции
 npm run db:migrate
 
-# Наполнить начальными данными (админ, пригласительный код)
+# Наполнить начальными данными (первый админ)
 npm run db:seed
 ```
 
 **Учётные данные после seed:**
 - Email: `admin@example.com`
 - Пароль: `admin123`
-- Пригласительный код для регистрации: `ADMIN2025`
 
 ⚠️ **Смените пароль админа после первого входа!**
 
@@ -179,7 +178,7 @@ chmod -R 755 server/uploads
 
 ```bash
 # Из корня проекта
-cd /path/to/21day-platform
+cd /path/to/21health
 
 # 1. Сборка фронтенда (VITE_API_URL должен быть задан)
 VITE_API_URL=/api npm run build
@@ -215,7 +214,7 @@ NODE_ENV=production node dist/index.js
 npm install -g pm2
 
 # Запуск
-cd /path/to/21day-platform/server
+cd /path/to/21health/server
 pm2 start dist/index.js --name 21day --env production
 
 # Автозапуск при перезагрузке
@@ -286,7 +285,7 @@ sudo certbot --nginx -d your-domain.com
 #!/bin/bash
 set -e
 
-cd /path/to/21day-platform
+cd /path/to/21health
 
 # Зависимости
 npm install
@@ -323,11 +322,11 @@ echo "Готово. Запуск: cd server && NODE_ENV=production node dist/ind
 | `VITE_API_URL` | Корень `.env` | Да (при сборке) | URL API для фронта. Продакшен: `/api` |
 | `DATABASE_URL` | `server/.env` | Да | PostgreSQL connection string |
 | `JWT_SECRET` | `server/.env` | Да | Секрет для JWT. Сгенерировать: `openssl rand -base64 32` |
-| `GEMINI_API_KEY` | `server/.env` | Да | Ключ Google Gemini API |
+| `GEMINI_API_KEY` | `server/.env` | Да | Ключ Google Gemini API для AI-квиза |
 | `NODE_ENV` | `server/.env` | Нет | `production` для прода |
 | `PORT` | `server/.env` | Нет | Порт сервера (по умолчанию 3001) |
-| `GEMINI_CHAT_MODEL` | `server/.env` | Нет | Модель чата (по умолчанию gemini-2.5-flash) |
-| `GEMINI_IMAGE_MODEL` | `server/.env` | Нет | Модель генерации изображений |
+| `GEMINI_CHAT_MODEL` | `server/.env` | Нет | Можно не использовать в упрощённой версии |
+| `GEMINI_IMAGE_MODEL` | `server/.env` | Нет | Можно не использовать в упрощённой версии |
 
 ---
 
@@ -364,7 +363,7 @@ echo "Готово. Запуск: cd server && NODE_ENV=production node dist/ind
 ## 9. Обновление проекта
 
 ```bash
-cd /path/to/21day-platform
+cd /path/to/21health
 git pull
 
 npm install

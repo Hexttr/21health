@@ -3,20 +3,6 @@ import { db } from '../db/index.js';
 import { platformSettings } from '../db/schema.js';
 
 export const ALLOWED_PLATFORM_SETTINGS = [
-  'markup_percent',
-  'daily_free_requests',
-  'min_topup_amount',
-  'max_topup_amount',
-  'free_for_admins',
-  'analytics_active_user_daily_requests',
-  'referral_signup_bonus_tokens',
-  'referral_course_purchase_bonus_tokens',
-  'ai_user_to_student_bonus_tokens',
-  'token_exchange_rate_rub_to_tokens',
-  'course_14_price_rub',
-  'course_21_price_rub',
-  'course_21_upgrade_price_rub',
-  'phone_verification_required_for_referrals',
   'ai_quiz_model_id',
 ] as const;
 

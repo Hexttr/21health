@@ -1,12 +1,12 @@
-# 21day-platform
+# 21health
 
-Платформа курсов — 21-дневный курс по AI для помогающих специалистов (психологи, коучи и др.).
+Бесплатная образовательная платформа на базе 21-дневного курса по AI для помогающих специалистов.
 
 ## Стек
 
 - **Frontend:** Vite, React 18, TypeScript, Tailwind CSS, shadcn/ui
 - **Backend:** Node.js, Fastify, Drizzle ORM, PostgreSQL
-- **AI:** Google Gemini (чат, квиз-тьютор, генерация изображений)
+- **AI:** Google Gemini для AI-квиза внутри уроков
 
 ## Инструкция по запуску
 
@@ -41,7 +41,7 @@ GEMINI_API_KEY="ваш-ключ-gemini-api"
 ```bash
 npm run db:create    # Создать БД 21day (если нет)
 npm run db:migrate   # Применить миграции
-npm run db:seed      # Создать админа и инвайт-код
+npm run db:seed      # Создать первого администратора
 ```
 
 ### 3. Запуск (каждый раз)
@@ -67,7 +67,7 @@ npm run dev
 ### 4. Вход
 
 - **Админ:** admin@example.com / admin123
-- **Инвайт-код для регистрации:** ADMIN2025 (из seed)
+- **Новые пользователи:** обычная регистрация по email/password, сразу получают роль `student`
 
 ## Скрипты
 
@@ -95,6 +95,10 @@ src/
 
 Подробная инструкция для деплоя: **[SERVER_SETUP.md](./SERVER_SETUP.md)** — пошаговое руководство для ИИ-агента или администратора.
 
-## Репозиторий
+## Что упрощено
 
-https://github.com/Hexttr/21day-platform
+- Удалены публичные AI-инструменты.
+- Удалены Robokassa, баланс, top-up, paywall и курс-коммерция.
+- Удалены referral, waitlist, invitation codes и social login.
+- Роли сведены к `admin` и `student`.
+- Курс на главной странице показывается сразу списком дней.

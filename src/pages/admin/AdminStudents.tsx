@@ -13,14 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { 
+import {
   Loader2, 
   Users,
   BookOpen,
-  CheckCircle2,
   Eye,
   Ban,
-  Filter,
   Key,
   RefreshCw,
   Pencil,
@@ -39,18 +37,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type AppRole = 'admin' | 'student_14' | 'student_21' | 'ai_user';
+type AppRole = 'admin' | 'student';
 
 interface StudentProgress {
   user_id: string;
   email: string;
   name: string;
   role: AppRole;
-  balance: number;
-  balanceTokens: number;
   completed_lessons: number;
   quiz_completed: number;
-  invitation_code_comment: string | null;
   is_blocked: boolean;
 }
 
@@ -59,8 +54,6 @@ export default function AdminStudents() {
   const { startImpersonation } = useImpersonation();
   const [students, setStudents] = useState<StudentProgress[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
-  const [filterStream, setFilterStream] = useState<string>('all');
-  const [availableStreams, setAvailableStreams] = useState<string[]>([]);
   
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetStudent, setResetStudent] = useState<StudentProgress | null>(null);
@@ -73,16 +66,12 @@ export default function AdminStudents() {
   const [isSavingName, setIsSavingName] = useState(false);
 
   const [changingRoleFor, setChangingRoleFor] = useState<string | null>(null);
-  const [savingBalanceFor, setSavingBalanceFor] = useState<string | null>(null);
-  const [balanceDrafts, setBalanceDrafts] = useState<Record<string, string>>({});
   const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<StudentProgress | null>(null);
 
   const getRoleLabel = (role: AppRole) => {
     if (role === 'admin') return 'Админ';
-    if (role === 'student_21') return 'Студент-21';
-    if (role === 'student_14') return 'Студент-14';
-    return 'Пользователь ИИ';
+    return 'Студент';
   };
 
   useEffect(() => {
@@ -100,22 +89,15 @@ export default function AdminStudents() {
     try {
       const data = await api<Array<{
         user_id: string; email: string; name: string; role: AppRole;
-        balance: number; balanceTokens: number;
         completed_lessons: number; quiz_completed: number;
-        invitation_code_comment: string | null; is_blocked: boolean;
+        is_blocked: boolean;
       }>>('/admin/users');
       const studentData: StudentProgress[] = data.map((u) => ({
-        user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'ai_user',
-        balance: u.balance ?? 0,
-        balanceTokens: u.balanceTokens ?? 0,
+        user_id: u.user_id, email: u.email, name: u.name, role: u.role || 'student',
         completed_lessons: u.completed_lessons, quiz_completed: u.quiz_completed,
-        invitation_code_comment: u.invitation_code_comment, is_blocked: u.is_blocked
+        is_blocked: u.is_blocked
       }));
-      const drafts = Object.fromEntries(studentData.map((student) => [student.user_id, String(student.balanceTokens)]));
-      const streams = new Set(data.map(u => u.invitation_code_comment).filter(Boolean) as string[]);
-      setAvailableStreams(Array.from(streams).sort());
       setStudents(studentData);
-      setBalanceDrafts(drafts);
     } catch (error) {
       console.error('Error loading students:', error);
       toast.error('Ошибка загрузки списка студентов');
@@ -224,62 +206,7 @@ export default function AdminStudents() {
       setDeletingStudentId(null);
     }
   };
-
-  const handleBalanceInputChange = (userId: string, value: string) => {
-    if (/^\d*$/.test(value) || value === '') {
-      setBalanceDrafts((current) => ({ ...current, [userId]: value }));
-    }
-  };
-
-  const handleSaveBalance = async (student: StudentProgress) => {
-    const rawValue = (balanceDrafts[student.user_id] ?? '').trim();
-    if (!rawValue) {
-      toast.error('Введите количество токенов');
-      return;
-    }
-
-    const parsedValue = Number.parseInt(rawValue, 10);
-    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
-      toast.error('Токены должны быть неотрицательным целым числом');
-      return;
-    }
-
-    const normalizedValue = Math.round(parsedValue);
-    if (normalizedValue === student.balanceTokens) {
-      return;
-    }
-
-    setSavingBalanceFor(student.user_id);
-    try {
-      const response = await api<{ success: true; balance: number; balanceTokens: number }>('/admin/users/set-balance', {
-        method: 'POST',
-        body: { userId: student.user_id, balanceTokens: normalizedValue },
-      });
-      setStudents((current) =>
-        current.map((item) => item.user_id === student.user_id ? {
-          ...item,
-          balance: response.balance,
-          balanceTokens: response.balanceTokens,
-        } : item)
-      );
-      setBalanceDrafts((current) => ({ ...current, [student.user_id]: String(response.balanceTokens) }));
-      toast.success('Баланс обновлен');
-    } catch (error) {
-      console.error('Error updating balance:', error);
-      toast.error(error instanceof Error ? error.message : 'Ошибка обновления баланса');
-    } finally {
-      setSavingBalanceFor(null);
-    }
-  };
-
-  const filteredStudents = (filterStream === 'all'
-    ? students
-    : filterStream === 'blocked'
-      ? students.filter(s => s.is_blocked)
-      : filterStream === 'none'
-        ? students.filter(s => !s.is_blocked && !s.invitation_code_comment)
-        : students.filter(s => !s.is_blocked && s.invitation_code_comment === filterStream)
-  ).sort((a, b) => {
+  const filteredStudents = students.sort((a, b) => {
     const totalA = a.completed_lessons + a.quiz_completed;
     const totalB = b.completed_lessons + b.quiz_completed;
     if (totalB !== totalA) return totalB - totalA;
@@ -336,22 +263,6 @@ export default function AdminStudents() {
               {filteredStudents.length}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            <Select value={filterStream} onValueChange={setFilterStream}>
-              <SelectTrigger className="w-[170px] h-9 rounded-xl border-border/50 bg-secondary/30 text-sm">
-                <SelectValue placeholder="Все студенты" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="all">Все студенты</SelectItem>
-                <SelectItem value="none">Без потока</SelectItem>
-                <SelectItem value="blocked">Заблокированные</SelectItem>
-                {availableStreams.map(stream => (
-                  <SelectItem key={stream} value={stream}>{stream}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
         {loadingStudents ? (
@@ -366,11 +277,10 @@ export default function AdminStudents() {
         ) : (
           <>
             {/* Header row — скрыт на мобильных */}
-            <div className="hidden sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto_auto] gap-4 px-5 sm:px-6 py-3 border-b border-border/50 bg-secondary/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="hidden sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 sm:px-6 py-3 border-b border-border/50 bg-secondary/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div className="w-10" />
               <div>Студент</div>
               <div className="w-[160px]">Роль</div>
-              <div className="w-[180px]">Токены</div>
               <div className="text-center min-w-[100px]">Прогресс</div>
               <div className="w-[140px] text-right">Действия</div>
             </div>
@@ -378,7 +288,7 @@ export default function AdminStudents() {
             {filteredStudents.map((student, index) => (
               <div
                 key={student.user_id}
-                className={`flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto_auto] sm:items-center gap-3 sm:gap-4 px-5 sm:px-6 py-4 hover:bg-secondary/20 transition-colors ${
+                className={`flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto_auto_auto] sm:items-center gap-3 sm:gap-4 px-5 sm:px-6 py-4 hover:bg-secondary/20 transition-colors ${
                   student.is_blocked ? 'bg-destructive/3' : ''
                 }`}
               >
@@ -400,11 +310,6 @@ export default function AdminStudents() {
                         Заблокирован
                       </span>
                     )}
-                    {student.invitation_code_comment && (student.role === 'student_14' || student.role === 'student_21') && student.invitation_code_comment !== 'Первый админ' && (
-                      <span className="text-xs px-2 py-0.5 bg-muted/50 text-muted-foreground rounded-full font-medium flex-shrink-0">
-                        {student.invitation_code_comment}
-                      </span>
-                    )}
                   </div>
                   <p className="text-sm text-muted-foreground truncate mt-0.5">{student.email}</p>
                 </div>
@@ -423,35 +328,9 @@ export default function AdminStudents() {
                     </SelectTrigger>
                     <SelectContent className="rounded-xl">
                       <SelectItem value="admin">Админ</SelectItem>
-                      <SelectItem value="student_21">Студент-21</SelectItem>
-                      <SelectItem value="student_14">Студент-14</SelectItem>
-                      <SelectItem value="ai_user">Пользователь ИИ</SelectItem>
+                      <SelectItem value="student">Студент</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="flex items-center gap-2 sm:gap-1.5">
-                  <span className="text-xs text-muted-foreground sm:hidden">Токены:</span>
-                  <Input
-                    value={balanceDrafts[student.user_id] ?? String(student.balanceTokens)}
-                    onChange={(e) => handleBalanceInputChange(student.user_id, e.target.value)}
-                    inputMode="numeric"
-                    className="h-8 w-full sm:w-[132px] rounded-lg border-border/50 bg-secondary/30 text-xs font-medium"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleSaveBalance(student)}
-                    disabled={savingBalanceFor === student.user_id}
-                    title="Сохранить токены"
-                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-success hover:bg-success/10"
-                  >
-                    {savingBalanceFor === student.user_id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
-                  </Button>
                 </div>
 
                 {/* Progress stats */}

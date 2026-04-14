@@ -8,7 +8,7 @@ import { getEffectiveCourseAccess } from '../lib/course-access.js';
 import { buildQuizInitializationPrompt } from '../lib/ai/prompt-builder.js';
 
 export async function lessonRoutes(app: FastifyInstance) {
-  // Get published lessons (authenticated, ai_user — нет доступа)
+  // Get published lessons
   app.get<{ Querystring: { viewMode?: string; userId?: string } }>('/lessons', async (req, reply) => {
     const payload = getAuthFromRequest(req);
     if (!payload) {
@@ -36,12 +36,8 @@ export async function lessonRoutes(app: FastifyInstance) {
       );
 
     const completedLessonIds = new Set(completedRows.map((row) => row.lessonId));
-    const maxVisibleLessons = access.role === 'ai_user' ? 21 : access.grantedLessons;
     const visibleRows = rows.filter((row) => {
-      if (access.role === 'ai_user') {
-        return true;
-      }
-      if (row.lessonId > maxVisibleLessons) {
+      if (row.lessonId > access.grantedLessons) {
         return false;
       }
       return row.isPublished || completedLessonIds.has(row.lessonId);
@@ -63,12 +59,9 @@ export async function lessonRoutes(app: FastifyInstance) {
 
     const targetUserId = payload.role === 'admin' && req.query.userId ? req.query.userId : payload.userId;
     const access = await getEffectiveCourseAccess(targetUserId);
-    if (access.role === 'ai_user') {
-      return reply.status(403).send({ error: 'Приобретите доступ к курсу, чтобы открыть урок' });
-    }
 
     if (access.role !== 'admin' && lessonId > access.grantedLessons) {
-      return reply.status(403).send({ error: 'Для доступа к этому уроку требуется более полный тариф курса' });
+      return reply.status(403).send({ error: 'Урок недоступен' });
     }
 
     const viewMode = req.query.viewMode === 'all' ? 'all' : 'student';

@@ -5,17 +5,13 @@ export interface AppUser {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'student_14' | 'student_21' | 'ai_user';
-  phone?: string | null;
-  phoneVerifiedAt?: string | null;
+  role: 'admin' | 'student';
 }
 
 interface SignUpParams {
   email: string;
   password: string;
   name: string;
-  accessCode?: string;
-  phone?: string;
 }
 
 interface AuthContextType {
@@ -26,10 +22,8 @@ interface AuthContextType {
   isSessionReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
-  completeSocialAuth: (ticket: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
-  validateAccessCode: (code: string) => Promise<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -81,29 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const validateAccessCode = async (code: string) => {
-    try {
-      const res = await api<{ valid: boolean; codeId?: string; codeType?: 'invitation' | 'referral'; error?: string }>('/auth/validate-code', {
-        method: 'POST',
-        body: { code },
-      });
-      return res.valid
-        ? { valid: true, codeId: res.codeId, codeType: res.codeType }
-        : { valid: false, error: res.error };
-    } catch {
-      return { valid: false, error: 'Ошибка проверки кода' };
-    }
-  };
-
-  const signUp = async ({ email, password, name, accessCode = '', phone }: SignUpParams) => {
-    const normalizedAccessCode = accessCode.trim().toUpperCase();
-
-    if (normalizedAccessCode) {
-      const codeValidation = await validateAccessCode(normalizedAccessCode);
-      if (!codeValidation.valid) {
-        return { error: codeValidation.error || 'Недействительный код' };
-      }
-    }
+  const signUp = async ({ email, password, name }: SignUpParams) => {
 
     try {
       const res = await api<{ token: string; user: AppUser }>('/auth/signup', {
@@ -112,24 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email,
           password,
           name,
-          accessCode: normalizedAccessCode || undefined,
-          phone: phone?.trim() || undefined,
         },
       });
       applyAuthenticatedSession(res.token, res.user);
       return { error: null };
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Ошибка регистрации' };
-    }
-  };
-
-  const completeSocialAuth = async (ticket: string) => {
-    try {
-      const res = await api<{ token: string; user: AppUser }>(`/auth/social/complete?ticket=${encodeURIComponent(ticket)}`);
-      applyAuthenticatedSession(res.token, res.user);
-      return { error: null };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Ошибка входа через соцсеть' };
     }
   };
 
@@ -151,10 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSessionReady,
         signIn,
         signUp,
-        completeSocialAuth,
         signOut,
         isAuthenticated: !!user,
-        validateAccessCode,
       }}
     >
       {children}
@@ -173,10 +131,8 @@ export function useAuth() {
       isSessionReady: false,
       signIn: async () => ({ error: 'Auth not ready' as string | null }),
       signUp: async () => ({ error: 'Auth not ready' as string | null }),
-      completeSocialAuth: async () => ({ error: 'Auth not ready' as string | null }),
       signOut: async () => {},
       isAuthenticated: false,
-      validateAccessCode: async () => ({ valid: false, error: 'Auth not ready' }),
     } as AuthContextType;
   }
   return context;

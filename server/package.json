@@ -11,7 +11,6 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
-    "db:seed-billing": "tsx src/db/seed-billing.ts",
     "db:import-lessons": "tsx src/scripts/import-lessons.ts",
     "db:import-migration": "tsx scripts/import-from-migration.ts",
     "db:import-data-package": "tsx scripts/import-from-data-package.ts"

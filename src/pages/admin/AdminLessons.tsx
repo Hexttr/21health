@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, apiUpload, getUploadUrl } from '@/api/client';
-import { courseData, getAllLessons } from '@/data/courseData';
+import { getAllLessons } from '@/data/courseData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -336,33 +336,24 @@ export default function AdminLessons() {
               <p className="text-xs text-muted-foreground mt-0.5">Выберите урок для редактирования</p>
             </div>
             <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
-              {courseData.map(week => (
-                <div key={week.id}>
-                  <div className="px-4 py-2 bg-muted/40 sticky top-0">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Неделя {week.id}
-                    </span>
-                  </div>
-                  {week.lessons.map(lesson => (
-                    <button
-                      key={lesson.id}
-                      onClick={() => setSelectedLessonId(lesson.id)}
-                      className={`
-                        w-full px-4 py-3 text-left border-b border-border/30 last:border-0
-                        hover:bg-secondary/50 transition-colors group
-                        ${selectedLessonId === lesson.id 
-                          ? 'bg-primary/5 border-l-2 !border-l-primary' 
-                          : 'border-l-2 border-l-transparent'
-                        }
-                      `}
-                    >
-                      <span className="text-xs font-semibold text-primary">День {lesson.day}</span>
-                      <p className="text-sm font-medium text-foreground truncate mt-0.5 group-hover:text-primary transition-colors">
-                        {lesson.title}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+              {allLessons.map(lesson => (
+                <button
+                  key={lesson.id}
+                  onClick={() => setSelectedLessonId(lesson.id)}
+                  className={`
+                    w-full px-4 py-3 text-left border-b border-border/30 last:border-0
+                    hover:bg-secondary/50 transition-colors group
+                    ${selectedLessonId === lesson.id 
+                      ? 'bg-primary/5 border-l-2 !border-l-primary' 
+                      : 'border-l-2 border-l-transparent'
+                    }
+                  `}
+                >
+                  <span className="text-xs font-semibold text-primary">День {lesson.id}</span>
+                  <p className="text-sm font-medium text-foreground truncate mt-0.5 group-hover:text-primary transition-colors">
+                    {lesson.title}
+                  </p>
+                </button>
               ))}
             </div>
           </div>
@@ -378,7 +369,7 @@ export default function AdminLessons() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
-                        День {selectedLesson.day}
+                        День {selectedLesson.id}
                       </span>
                     </div>
                     <h2 className="font-serif text-lg font-semibold text-foreground">

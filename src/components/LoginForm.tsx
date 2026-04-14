@@ -4,32 +4,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, AlertCircle, Brain, Zap, Target, CalendarPlus } from 'lucide-react';
+import { Loader2, AlertCircle, Brain, Zap, Target } from 'lucide-react';
 import { TestimonialsSection } from './TestimonialsSection';
-import { WaitlistModal } from './WaitlistModal';
-import { VkIdOAuthWidget } from './VkIdOAuthWidget';
 import { useSearchParams } from 'react-router-dom';
 
 export function LoginForm() {
-  const { signIn, signUp, validateAccessCode } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [accessCode, setAccessCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [codeValidating, setCodeValidating] = useState(false);
-  const [codeValid, setCodeValid] = useState<boolean | null>(null);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const referralCode = useMemo(() => searchParams.get('ref')?.trim().toUpperCase() || '', [searchParams]);
 
   React.useEffect(() => {
     if (referralCode) {
-      setAccessCode(referralCode);
-      setCodeValid(true);
+      setSuccess('Реферальная ссылка больше не требуется: просто зарегистрируйтесь по email.');
     }
   }, [referralCode]);
 
@@ -46,23 +38,6 @@ export function LoginForm() {
     setIsLoading(false);
   };
 
-  const handleCodeBlur = async () => {
-    if (!accessCode.trim()) {
-      setCodeValid(null);
-      return;
-    }
-    
-    setCodeValidating(true);
-    const result = await validateAccessCode(accessCode);
-    setCodeValid(result.valid);
-    if (!result.valid) {
-      setError(result.error || 'Недействительный код');
-    } else {
-      setError('');
-    }
-    setCodeValidating(false);
-  };
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -74,8 +49,6 @@ export function LoginForm() {
       email,
       password,
       name,
-      accessCode,
-      phone,
     });
     
     if (error) {
@@ -136,21 +109,9 @@ export function LoginForm() {
                   </div>
                 ))}
               </div>
-
-              {/* Waitlist button - highly visible with animation */}
-              <Button 
-                onClick={() => setWaitlistOpen(true)}
-                className="mt-8 bg-white text-primary font-semibold hover:bg-white/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-white"
-                size="lg"
-              >
-                <CalendarPlus className="w-5 h-5 mr-2" />
-                Ранний доступ на платформу
-              </Button>
             </div>
           </div>
         </div>
-
-        <WaitlistModal open={waitlistOpen} onOpenChange={setWaitlistOpen} />
 
         {/* Right side - Form */}
         <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
@@ -168,15 +129,6 @@ export function LoginForm() {
               <p className="text-muted-foreground mt-1 text-sm">
                 21-дневный курс по ИИ
               </p>
-              {/* Mobile waitlist button */}
-              <Button 
-                onClick={() => setWaitlistOpen(true)}
-                className="mt-4 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 hover:scale-105 shadow-lg hover:shadow-xl transition-all duration-300"
-                size="lg"
-              >
-                <CalendarPlus className="w-5 h-5 mr-2" />
-                Ранний доступ на платформу
-              </Button>
             </div>
 
             {/* Form card */}
@@ -230,7 +182,6 @@ export function LoginForm() {
                           className="h-12 rounded-xl border-border/50 focus:border-primary bg-secondary/30"
                         />
                       </div>
-                      <VkIdOAuthWidget accessCode={accessCode} />
 
                       {error && (
                         <div className="flex items-start gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20">
@@ -260,37 +211,9 @@ export function LoginForm() {
                     <form onSubmit={handleSignUp} className="space-y-5">
                       {referralCode && (
                         <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground">
-                          Вы регистрируетесь по реферальной ссылке. Код уже подставлен в поле ниже: <span className="font-semibold text-primary">{referralCode}</span>
+                          Реферальные и пригласительные коды убраны. Создайте аккаунт и получите полный доступ сразу после регистрации.
                         </div>
                       )}
-                      <div className="space-y-2">
-                        <Label htmlFor="invitation-code" className="text-sm font-medium">
-                          Пригласительный или реферальный код
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            id="invitation-code"
-                            type="text"
-                            placeholder="Например: X1D5378"
-                            value={accessCode}
-                            onChange={(e) => {
-                              setAccessCode(e.target.value.toUpperCase());
-                              setCodeValid(null);
-                            }}
-                            onBlur={handleCodeBlur}
-                            className={`h-12 rounded-xl border-border/50 focus:border-primary bg-secondary/30 uppercase ${
-                              codeValid === true ? 'border-green-500 bg-green-50/10' : 
-                              codeValid === false ? 'border-destructive bg-destructive/5' : ''
-                            }`}
-                          />
-                          {codeValidating && (
-                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-                          )}
-                          {codeValid === true && !codeValidating && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">✓</span>
-                          )}
-                        </div>
-                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="name-register" className="text-sm font-medium">
                           Ф.И.О.
@@ -304,22 +227,6 @@ export function LoginForm() {
                           required
                           className="h-12 rounded-xl border-border/50 focus:border-primary bg-secondary/30"
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="phone-register" className="text-sm font-medium">
-                          Телефон
-                        </Label>
-                        <Input
-                          id="phone-register"
-                          type="tel"
-                          placeholder="+7 999 123 45 67"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          className="h-12 rounded-xl border-border/50 focus:border-primary bg-secondary/30"
-                        />
-                        <p className="text-xs text-muted-foreground leading-5">
-                          Необязательно на старте. Подтвержденный номер понадобится для реферальной программы.
-                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="email-register" className="text-sm font-medium">

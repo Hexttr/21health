@@ -1,4 +1,4 @@
-# Деплой 21day-platform на Ubuntu (ветка ubuntu)
+# Деплой 21health на Ubuntu
 
 Скрипт `deploy_ubuntu.py` выполняет установку на сервер через SSH (Paramiko).
 
@@ -13,7 +13,7 @@
 # Разведка (проверка подключения и конфигурации сервера)
 python deploy_ubuntu.py --check
 
-# Полный деплой (нужен ключ Gemini API)
+# Полный деплой (нужен ключ Gemini API для AI-квиза)
 python deploy_ubuntu.py ВАШ_GEMINI_API_KEY
 ```
 
@@ -36,4 +36,4 @@ python deploy_ubuntu.py ВАШ_GEMINI_API_KEY
 
 - Приложение: https://21day.club
 - Админ: admin@example.com / admin123 (**смените пароль!**)
-- Инвайт-код: ADMIN2025
+- Регистрация пользователей: обычная email/password, без инвайтов и соцлогина

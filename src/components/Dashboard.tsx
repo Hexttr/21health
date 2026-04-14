@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { courseData, getLessonById } from '@/data/courseData';
+import { getAllLessons, getLessonById } from '@/data/courseData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProgress } from '@/contexts/ProgressContext';
 import { usePublishedLessons } from '@/hooks/usePublishedLessons';
 import { useCourseViewMode } from '@/hooks/useCourseViewMode';
-import { useCourseCommerce } from '@/hooks/useCourseCommerce';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { WeekCard } from './WeekCard';
+import { LessonCard } from './LessonCard';
 import { LessonView } from './LessonView';
 import { PracticalMaterials } from './PracticalMaterials';
 import { TestimonialsSection } from './TestimonialsSection';
@@ -14,7 +13,6 @@ import {
   BookOpen, 
   Target, 
   Trophy,
-  ArrowRight,
   Play,
   Sparkles,
   LogOut,
@@ -24,8 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { toast } from 'sonner';
-import { api } from '@/api/client';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,10 +33,8 @@ import {
 
 export function Dashboard() {
   const { user, signOut, isAdmin } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
-  const [isCreatingOrder, setIsCreatingOrder] = useState<string | null>(null);
   const {
     getCompletedCount,
     getProgressPercentage,
@@ -50,7 +45,6 @@ export function Dashboard() {
     refreshProgress,
   } = useProgress();
   const { viewMode, setViewMode } = useCourseViewMode();
-  const { access, courses, refresh: refreshCourseAccess } = useCourseCommerce();
   const { impersonatedUser, isImpersonating, stopImpersonation } = useImpersonation();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const effectiveCourseViewMode = isImpersonating ? 'student' : viewMode;
@@ -66,28 +60,12 @@ export function Dashboard() {
   const progressPercentage = isProgressLoading ? 0 : getProgressPercentage();
   const selectedLesson = selectedLessonId ? getLessonById(selectedLessonId) : null;
   const isDataLoading = isLessonsLoading || isProgressLoading;
-  const grantedLessons = isFullCourseMode
-    ? 21
-    : access?.grantedLessons
-      ?? (user?.role === 'student_21' ? 21 : user?.role === 'student_14' ? 14 : 0);
-  const isPreviewOnly = !isFullCourseMode && user?.role === 'ai_user';
-
-  const allLessons = courseData.flatMap(week => week.lessons);
-  const course14 = courses.find((course) => course.code === 'course_14');
-  const course21 = courses.find((course) => course.code === 'course_21');
-  const isPartialAccess = !isPreviewOnly && grantedLessons > 0 && grantedLessons < 21;
+  const allLessons = getAllLessons();
+  const grantedLessons = 21;
 
   const canAccessLesson = (lessonId: number) => {
     if (isFullCourseMode) {
       return true;
-    }
-
-    if (isPreviewOnly) {
-      return false;
-    }
-
-    if (grantedLessons > 0 && lessonId > grantedLessons) {
-      return false;
     }
 
     if (!isLessonVisible(lessonId)) {
@@ -118,14 +96,6 @@ export function Dashboard() {
       return null;
     }
 
-    if (isPreviewOnly) {
-      return 'course_access_required';
-    }
-
-    if (grantedLessons > 0 && lessonId > grantedLessons) {
-      return 'upgrade_required';
-    }
-
     if (!isLessonVisible(lessonId) || !isLessonPublished(lessonId)) {
       return 'unpublished';
     }
@@ -141,7 +111,7 @@ export function Dashboard() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([refreshProgress(), refreshPublishedLessons(), refreshCourseAccess()]);
+      await Promise.all([refreshProgress(), refreshPublishedLessons()]);
       toast.success('Данные обновлены');
     } catch {
       toast.error('Ошибка обновления');
@@ -153,29 +123,11 @@ export function Dashboard() {
   React.useEffect(() => {
     const paymentStatus = searchParams.get('coursePayment');
     if (paymentStatus === 'success') {
-      toast.success('Оплата прошла успешно. Доступ к курсу обновлен.');
-      refreshCourseAccess();
       setSearchParams({}, { replace: true });
     } else if (paymentStatus === 'failed') {
-      toast.error('Платеж не завершен. Попробуйте еще раз.');
       setSearchParams({}, { replace: true });
     }
-  }, [refreshCourseAccess, searchParams, setSearchParams]);
-
-  const handlePurchaseCourse = async (courseCode: string) => {
-    setIsCreatingOrder(courseCode);
-    try {
-      const data = await api<{ paymentUrl: string }>('/course-orders', {
-        method: 'POST',
-        body: { courseCode },
-      });
-      window.location.href = data.paymentUrl;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Не удалось создать заказ');
-    } finally {
-      setIsCreatingOrder(null);
-    }
-  };
+  }, [searchParams, setSearchParams]);
 
   if (selectedLesson) {
     return (
@@ -184,7 +136,7 @@ export function Dashboard() {
         <div className="md:hidden sticky top-0 z-40 flex items-center gap-3 px-4 sm:px-6 h-14 bg-card/80 backdrop-blur-xl border-b border-border/50">
           <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
           <span className="font-semibold text-foreground text-sm">
-            <span className="text-primary">21DAY</span> — День {selectedLesson.day}
+            <span className="text-primary">21DAY</span> — День {selectedLesson.id}
           </span>
         </div>
         <div className="container mx-auto px-4 py-6 max-w-3xl min-[1920px]:max-w-[80%]">
@@ -340,28 +292,10 @@ export function Dashboard() {
               </h1>
 
               <p className="text-white/75 text-base sm:text-lg leading-relaxed mb-8 max-w-xl">
-                {isPreviewOnly
-                  ? 'Вы видите полную программу курса. Названия уроков открыты для просмотра, а сами уроки, AI-тесты и практические материалы активируются после покупки.'
-                  : isPartialAccess
-                    ? `У вас открыт тариф на ${grantedLessons} ${grantedLessons === 14 ? 'дней' : 'уроков'}. Можно продолжать обучение и при необходимости сделать апгрейд до полного курса.`
-                    : 'Практический курс для помогающих специалистов. 15 минут в день — и вы автоматизируете рутину, увеличите охваты и освободите время для клиентов.'}
+                Практический курс для помогающих специалистов. 15 минут в день, последовательное прохождение по дням и AI-тесты для закрепления материала.
               </p>
 
-              {isPreviewOnly ? (
-                <div className="flex flex-col gap-4">
-                  <button
-                    onClick={() => navigate('/course-access')}
-                    className="group inline-flex items-center justify-center gap-3 bg-white text-primary font-bold px-7 py-3.5 rounded-2xl shadow-lg hover:shadow-xl hover:scale-[1.03] transition-all duration-300 text-base"
-                  >
-                    Получить доступ к курсу
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                  <div className="flex flex-wrap gap-2 text-sm text-white/85">
-                    {course14 && <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1">14 дней — {Number(course14.priceRub).toLocaleString('ru-RU')} ₽</span>}
-                    {course21 && <span className="rounded-full border border-white/20 bg-white/12 px-3 py-1">21 день — {Number(course21.priceRub).toLocaleString('ru-RU')} ₽</span>}
-                  </div>
-                </div>
-              ) : nextLesson ? (
+              {nextLesson ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <button
                     onClick={() => setSelectedLessonId(nextLesson.id)}
@@ -369,18 +303,8 @@ export function Dashboard() {
                   >
                     <Play className="w-4.5 h-4.5 fill-primary" style={{ width: '18px', height: '18px' }} />
                     {completedCount === 0 ? 'Начать обучение' : 'Продолжить'}
-                    <span className="font-normal text-primary/70">— День {nextLesson.day}</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <span className="font-normal text-primary/70">— День {nextLesson.id}</span>
                   </button>
-                  {isPartialAccess && course21 && (
-                    <button
-                      onClick={() => handlePurchaseCourse(course21.code)}
-                      disabled={isCreatingOrder !== null || !access?.canUpgradeTo21}
-                      className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/30 bg-white/15 px-7 py-3.5 text-base font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 disabled:opacity-70"
-                    >
-                      {isCreatingOrder === course21.code ? 'Создаем заказ...' : `Апгрейд до 21 дней — ${Number(course21.upgradePriceRub || 0).toLocaleString('ru-RU')} ₽`}
-                    </button>
-                  )}
                 </div>
               ) : allCompleted ? (
                 <div className="inline-flex items-center gap-3 bg-white/20 border border-white/30 text-white font-semibold px-7 py-3.5 rounded-2xl backdrop-blur-sm">
@@ -401,8 +325,8 @@ export function Dashboard() {
             {[
               { value: `${completedCount}`, sup: '/21', label: 'Пройдено' },
               { value: '21', sup: '', label: 'День практики' },
-              { value: grantedLessons > 0 ? `${grantedLessons}` : '0', sup: '/21', label: isPreviewOnly ? 'Доступно после покупки' : 'Доступно сейчас' },
-              { value: isPreviewOnly ? '2' : '15', sup: isPreviewOnly ? ' тарифа' : ' мин', label: isPreviewOnly ? 'Формата курса' : 'В день' },
+              { value: `${grantedLessons}`, sup: '/21', label: 'Доступно сейчас' },
+              { value: '15', sup: ' мин', label: 'В день' },
             ].map((stat, i) => (
               <div key={i} className="text-center">
                 <p className="text-xl sm:text-2xl font-extrabold text-white leading-none" style={{ fontFamily: 'Outfit, sans-serif' }}>
@@ -454,16 +378,15 @@ export function Dashboard() {
           </div>
 
           <div className="space-y-3 sm:space-y-4">
-            {courseData.map((week, index) => (
-              <WeekCard
-                key={week.id}
-                week={week}
-                onSelectLesson={setSelectedLessonId}
-                defaultOpen={false}
-                isLessonPublished={isLessonPublished}
-                canAccessLesson={canAccessLesson}
-                getLessonLockReason={getLessonLockReason}
+            {allLessons.map((lesson, index) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                onClick={() => setSelectedLessonId(lesson.id)}
+                isAccessible={canAccessLesson(lesson.id)}
+                lockReason={getLessonLockReason(lesson.id)}
                 isDataLoading={isDataLoading}
+                style={{ animationDelay: `${index * 30}ms` }}
               />
             ))}
           </div>

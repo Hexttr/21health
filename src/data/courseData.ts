@@ -5,26 +5,12 @@ export interface Lesson {
   description: string;
   videoTopics: string[];
   task: string;
-  week: number;
 }
 
-export interface Week {
-  id: number;
-  title: string;
-  goal: string;
-  lessons: Lesson[];
-}
-
-export const courseData: Week[] = [
-  {
-    id: 1,
-    title: "Неделя 1: Основы ИИ и базовые инструменты",
-    goal: "Познакомиться с ИИ, научиться работать с текстовыми моделями",
-    lessons: [
+export const courseData: Lesson[] = [
       {
         id: 1,
         day: 1,
-        week: 1,
         title: "Введение в ИИ для вашей практики",
         description: "Знакомство с искусственным интеллектом и его возможностями для помогающих специалистов. Вы узнаете, как работают нейросети простыми словами, какие инструменты доступны и как их использовать этично.",
         videoTopics: [
@@ -40,7 +26,6 @@ export const courseData: Week[] = [
       {
         id: 2,
         day: 2,
-        week: 1,
         title: "Основы промпт-инженеринга",
         description: "Промпт — это инструкция для ИИ. От качества промпта зависит качество ответа. Узнайте структуру эффективного промпта и типичные ошибки новичков.",
         videoTopics: [
@@ -55,7 +40,6 @@ export const courseData: Week[] = [
       {
         id: 3,
         day: 3,
-        week: 1,
         title: "ИИ для работы с клиентскими текстами",
         description: "Научитесь использовать ИИ для анализа запросов клиентов, автоматизации FAQ, создания шаблонов ответов и персонализации коммуникации.",
         videoTopics: [
@@ -70,7 +54,6 @@ export const courseData: Week[] = [
       {
         id: 4,
         day: 4,
-        week: 1,
         title: "ИИ для контента и маркетинга",
         description: "Освойте создание контент-стратегии с помощью ИИ: генерация идей для постов, создание контент-плана, адаптация контента под разные платформы.",
         videoTopics: [
@@ -85,7 +68,6 @@ export const courseData: Week[] = [
       {
         id: 5,
         day: 5,
-        week: 1,
         title: "Создание визуального контента и презентаций с ИИ",
         description: "Познакомьтесь с инструментами для генерации изображений и создания презентаций с помощью искусственного интеллекта.",
         videoTopics: [
@@ -100,7 +82,6 @@ export const courseData: Week[] = [
       {
         id: 6,
         day: 6,
-        week: 1,
         title: "ИИ для исследований и аналитики",
         description: "Научитесь использовать Perplexity AI для глубоких исследований рынка, анализа конкурентов и поиска трендов в вашей нише.",
         videoTopics: [
@@ -115,7 +96,6 @@ export const courseData: Week[] = [
       {
         id: 7,
         day: 7,
-        week: 1,
         title: "Считаем новый проект/стартап с помощью ИИ",
         description: "Используйте ИИ для генерации бизнес-идей, валидации спроса, расчета unit-экономики и создания питч-дека.",
         videoTopics: [
@@ -126,18 +106,10 @@ export const courseData: Week[] = [
           "Питч-дек и бизнес-план за 30 минут с Gamma AI"
         ],
         task: "1. Сгенерировать 10 идей\n2. Выбрать лучшую и проверить спрос через Perplexity\n3. Рассчитать базовую экономику (цена, себестоимость, прибыль)\n4. Создать презентацию проекта в Gamma AI (10-15 слайдов)"
-      }
-    ]
-  },
-  {
-    id: 2,
-    title: "Неделя 2: Продвинутые инструменты и автоматизация",
-    goal: "Освоить специализированные инструменты и автоматизацию рутины",
-    lessons: [
+      },
       {
         id: 8,
         day: 8,
-        week: 2,
         title: "ИИ для работы с клиентами",
         description: "Автоматизация записи на консультации, создание чат-ботов для Telegram, настройка автоответчиков с персонализацией.",
         videoTopics: [
@@ -152,7 +124,6 @@ export const courseData: Week[] = [
       {
         id: 9,
         day: 9,
-        week: 2,
         title: "Видео-контент с ИИ",
         description: "Создание видео из текста с помощью Invideo AI, генерация аватара и озвучки с HeyGen, автоматические субтитры и монтаж.",
         videoTopics: [
@@ -167,7 +138,6 @@ export const courseData: Week[] = [
       {
         id: 10,
         day: 10,
-        week: 2,
         title: "Озвучка и аудио-контент с ElevenLabs и Yandex SpeechKit",
         description: "Создание реалистичных голосов, аудио-медитаций, озвучка контента и клонирование собственного голоса.",
         videoTopics: [
@@ -183,7 +153,6 @@ export const courseData: Week[] = [
       {
         id: 11,
         day: 11,
-        week: 2,
         title: "Автоматизация рассылок и email-маркетинг",
         description: "Сегментация аудитории с помощью ИИ, создание серий welcome-писем, персонализация контента и настройка триггерных писем.",
         videoTopics: [
@@ -198,7 +167,6 @@ export const courseData: Week[] = [
       {
         id: 12,
         day: 12,
-        week: 2,
         title: "Автоматизация соцсетей с российскими инструментами",
         description: "Инструменты для автопостинга в российских соцсетях: SMMplanner, Postmypost, настройка расписания публикаций.",
         videoTopics: [
@@ -213,7 +181,6 @@ export const courseData: Week[] = [
       {
         id: 13,
         day: 13,
-        week: 2,
         title: "Perplexity AI и Local RAG для работы с базой знаний",
         description: "Глубокие исследования с Perplexity AI Pro, создание персональной базы знаний с RAG на вашем компьютере.",
         videoTopics: [
@@ -227,7 +194,6 @@ export const courseData: Week[] = [
       {
         id: 14,
         day: 14,
-        week: 2,
         title: "Практикум недели 2",
         description: "Разбор лучших работ участников, топ-5 ошибок при автоматизации, примеры полных воронок от подписки до продажи.",
         videoTopics: [
@@ -237,18 +203,10 @@ export const courseData: Week[] = [
           "Примеры полных воронок от подписки до продажи"
         ],
         task: "Создать полную автоматизированную воронку для одной услуги:\n• Лид-магнит (чек-лист/гайд)\n• Серия из 3-5 писем\n• Посадочная страница (текст + дизайн через ИИ)\n• Автопостинг анонса в соцсети\n• Система записи на консультацию"
-      }
-    ]
-  },
-  {
-    id: 3,
-    title: "Неделя 3: Продвинутая автоматизация и специализация",
-    goal: "Создать полноценную экосистему ИИ-инструментов для практики",
-    lessons: [
+      },
       {
         id: 15,
         day: 15,
-        week: 3,
         title: "No-code автоматизация: n8n и ChatGPT Actions",
         description: "Бесплатный open-source инструмент n8n для автоматизации, создание кастомных действий в ChatGPT, интеграция сервисов без программирования.",
         videoTopics: [
@@ -264,7 +222,6 @@ export const courseData: Week[] = [
       {
         id: 16,
         day: 16,
-        week: 3,
         title: "ИИ-аналитика с бесплатными российскими облачными сервисами",
         description: "Яндекс DataLens для аналитики и визуализации, Google Looker Studio для дашбордов, ChatGPT для интерпретации данных.",
         videoTopics: [
@@ -280,7 +237,6 @@ export const courseData: Week[] = [
       {
         id: 17,
         day: 17,
-        week: 3,
         title: "Персональный ИИ-ассистент",
         description: "Создание собственного GPT в ChatGPT под ваши задачи, настройка инструкций и базы знаний, интеграция в рабочий процесс.",
         videoTopics: [
@@ -296,7 +252,6 @@ export const courseData: Week[] = [
       {
         id: 18,
         day: 18,
-        week: 3,
         title: "ИИ для личного бренда",
         description: "Как оставаться аутентичным при использовании ИИ, создание стратегии личного бренда, обучение ИИ вашему стилю.",
         videoTopics: [
@@ -312,7 +267,6 @@ export const courseData: Week[] = [
       {
         id: 19,
         day: 19,
-        week: 3,
         title: "Специализация под нишу",
         description: "Специализированные инструменты для психологов, тарологов, нумерологов. ИИ для заметок, документации, интерпретации.",
         videoTopics: [
@@ -329,7 +283,6 @@ export const courseData: Week[] = [
       {
         id: 20,
         day: 20,
-        week: 3,
         title: "Этика, безопасность и ограничения ИИ",
         description: "Этические аспекты использования ИИ, конфиденциальность и защита данных, когда не стоит использовать ИИ.",
         videoTopics: [
@@ -344,7 +297,6 @@ export const courseData: Week[] = [
       {
         id: 21,
         day: 21,
-        week: 3,
         title: "Финальный проект и дальнейшие шаги",
         description: "Защита финальных проектов, план развития на следующие 3 месяца, создание сообщества выпускников.",
         videoTopics: [
@@ -357,20 +309,12 @@ export const courseData: Week[] = [
         ],
         task: "Финальный проект: создать полную экосистему ИИ-инструментов для вашей практики:\n• Персональный GPT-ассистент\n• Автоматизированная воронка продаж\n• Система работы с контентом\n• Аналитический дашборд\n• Документ «Моя ИИ-стратегия на 3 месяца»"
       }
-    ]
-  }
 ];
 
 export const getAllLessons = (): Lesson[] => {
-  return courseData.flatMap(week => week.lessons);
+  return courseData;
 };
 
 export const getLessonById = (id: number): Lesson | undefined => {
   return getAllLessons().find(lesson => lesson.id === id);
-};
-
-export const getWeekByLessonId = (lessonId: number): Week | undefined => {
-  return courseData.find(week => 
-    week.lessons.some(lesson => lesson.id === lessonId)
-  );
 };
