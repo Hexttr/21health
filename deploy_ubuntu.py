@@ -69,6 +69,25 @@ def ensure_base_packages(ssh, config) -> None:
     run_remote(ssh, "systemctl enable --now postgresql nginx", sudo=True, sudo_password=config.ssh_password)
 
 
+def ensure_ollama_ready(ssh, config) -> None:
+    if config.quiz_provider.strip().lower() != "ollama":
+        return
+
+    print("Ensuring Ollama runtime for quiz POC...")
+    out, _, code = run_remote(ssh, "command -v ollama", check=False, timeout=60)
+    if code != 0 or not out.strip():
+        run_remote(
+            ssh,
+            "curl -fsSL https://ollama.com/install.sh | sh",
+            sudo=True,
+            sudo_password=config.ssh_password,
+            timeout=1800,
+        )
+
+    run_remote(ssh, "systemctl enable --now ollama", sudo=True, sudo_password=config.ssh_password, timeout=180)
+    run_remote(ssh, f"ollama pull {config.ollama_model}", timeout=3600)
+
+
 def prepare_repo(ssh, config) -> None:
     print("Preparing application directory...")
     run_remote(
@@ -183,6 +202,10 @@ def build_server_env(existing_env: dict[str, str], config) -> tuple[str, str]:
         or secrets.token_urlsafe(48)
     )
     gemini_api_key = existing_env.get("GEMINI_API_KEY") or config.gemini_api_key
+    quiz_provider = existing_env.get("QUIZ_PROVIDER") or config.quiz_provider
+    ollama_host = existing_env.get("OLLAMA_HOST") or config.ollama_host
+    ollama_model = existing_env.get("OLLAMA_MODEL") or config.ollama_model
+    ollama_timeout_ms = existing_env.get("OLLAMA_TIMEOUT_MS") or str(config.ollama_timeout_ms)
 
     env_content = "\n".join(
         [
@@ -191,6 +214,10 @@ def build_server_env(existing_env: dict[str, str], config) -> tuple[str, str]:
             f'JWT_SECRET="{jwt_secret}"',
             f'PROVIDER_SECRET_KEY="{provider_secret_key}"',
             f'GEMINI_API_KEY="{gemini_api_key}"',
+            f'QUIZ_PROVIDER="{quiz_provider}"',
+            f'OLLAMA_HOST="{ollama_host}"',
+            f'OLLAMA_MODEL="{ollama_model}"',
+            f'OLLAMA_TIMEOUT_MS="{ollama_timeout_ms}"',
             'NODE_ENV="production"',
             f'PORT="{config.app_port}"',
             "",
@@ -398,6 +425,7 @@ def main() -> None:
         write_remote_text(ssh, f"{config.deploy_dir}/server/.env", env_content, mode="600")
         write_remote_text(ssh, f"{config.deploy_dir}/.env", 'VITE_API_URL="/api"\n', mode="644")
 
+        ensure_ollama_ready(ssh, config)
         install_dependencies_and_build(ssh, config)
         ensure_ai_runtime_seed(ssh, config)
         configure_pm2(ssh, config)

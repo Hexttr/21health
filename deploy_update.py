@@ -14,6 +14,11 @@ def main() -> None:
 
     ssh = connect(config)
     try:
+        if config.quiz_provider.strip().lower() == "ollama":
+            print("0. Ensuring Ollama model...")
+            run_remote(ssh, "systemctl enable --now ollama", sudo=True, sudo_password=config.ssh_password, timeout=180)
+            run_remote(ssh, f"ollama pull {config.ollama_model}", timeout=3600)
+
         print("1. Validating nginx config...")
         run_remote(ssh, "nginx -t", sudo=True, sudo_password=config.ssh_password)
 

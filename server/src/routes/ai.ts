@@ -7,6 +7,7 @@ import { getProviderAdapter } from '../lib/ai/provider-registry.js';
 import { translateAiProviderErrorMessage } from '../lib/ai/error-messages.js';
 import { resolveQuizRuntimeModel } from '../lib/ai/runtime.js';
 import { AIResolvedModel, QuizConversationMessage, QuizLearningState } from '../lib/ai/types.js';
+import { runQuizWithOllama } from '../lib/ai/ollama-quiz.js';
 
 function requireAuth(req: Parameters<typeof getAuthFromRequest>[0], reply: { status: (code: number) => { send: (body: unknown) => unknown } }): JwtPayload | null {
   const payload = getAuthFromRequest(req);
@@ -36,10 +37,10 @@ function isAbortError(error: unknown): boolean {
 function createAbortController(req: { raw: NodeJS.EventEmitter & { destroyed?: boolean } }) {
   const controller = new AbortController();
   const abort = () => controller.abort();
-  req.raw.once('close', abort);
+  req.raw.once('aborted', abort);
   return {
     controller,
-    cleanup: () => req.raw.off('close', abort),
+    cleanup: () => req.raw.off('aborted', abort),
   };
 }
 
@@ -92,6 +93,10 @@ async function resolveKeyOrReply(model: AIResolvedModel, reply: FastifyReply): P
   return key;
 }
 
+function shouldUseOllamaQuiz(): boolean {
+  return (process.env.QUIZ_PROVIDER || '').trim().toLowerCase() === 'ollama';
+}
+
 export async function aiRoutes(app: FastifyInstance) {
   app.get('/ai/health', async (_req, reply) => reply.send({ ok: true, service: 'ai' }));
 
@@ -110,15 +115,6 @@ export async function aiRoutes(app: FastifyInstance) {
     const payload = requireAuth(req, reply);
     if (!payload) return;
 
-    const model = await resolveQuizRuntimeModel();
-    if (!model) return reply.status(400).send({ error: 'Нет активной текстовой модели для квиза' });
-    if (model.providerName !== 'gemini') {
-      return reply.status(400).send({ error: 'Для AI-квиза нужна совместимая Gemini-модель. Обновите настройку модели квиза в админке.' });
-    }
-
-    const key = await resolveKeyOrReply(model, reply);
-    if (!key) return;
-
     const {
       lessonTitle,
       lessonDescription,
@@ -129,44 +125,76 @@ export async function aiRoutes(app: FastifyInstance) {
       customPromptIsOverride = false,
       learningState,
     } = req.body || {};
-    const systemPrompt = customPromptIsOverride && customPrompt?.trim()
-      ? customPrompt.trim()
-      : conversationHistory.length === 0
-        ? buildQuizInitializationPrompt({
-            lessonTitle,
-            lessonDescription,
-            videoTopics,
-            customPrompt,
-          })
-        : buildQuizFollowUpPrompt({
-            lessonTitle,
-            lessonDescription,
-            videoTopics,
-            customPrompt,
-            learningState,
-          });
-    const profile = buildGenerationProfile({
-      model,
-      taskMode: 'quiz',
-      systemPrompt,
-    });
 
     const { controller, cleanup } = createAbortController(req);
     try {
-      const adapter = getProviderAdapter(model.providerName);
-      const result = await adapter.runQuiz({
-        apiKey: key,
-        model,
-        profile,
-        lessonTitle,
-        lessonDescription,
-        videoTopics,
-        userAnswer,
-        conversationHistory: conversationHistory as QuizConversationMessage[],
-        customPrompt,
-        learningState,
-        signal: controller.signal,
-      });
+      let result;
+
+      if (shouldUseOllamaQuiz()) {
+        const ollamaProfile = buildGenerationProfile({
+          model: { providerName: 'ollama' },
+          taskMode: 'quiz',
+          systemPrompt: '',
+        });
+
+        result = await runQuizWithOllama({
+          profile: ollamaProfile,
+          lessonTitle,
+          lessonDescription,
+          videoTopics,
+          userAnswer,
+          conversationHistory: conversationHistory as QuizConversationMessage[],
+          customPrompt,
+          learningState,
+          signal: controller.signal,
+        });
+      } else {
+        const model = await resolveQuizRuntimeModel();
+        if (!model) return reply.status(400).send({ error: 'Нет активной текстовой модели для квиза' });
+        if (model.providerName !== 'gemini') {
+          return reply.status(400).send({ error: 'Для AI-квиза нужна совместимая Gemini-модель. Обновите настройку модели квиза в админке.' });
+        }
+
+        const key = await resolveKeyOrReply(model, reply);
+        if (!key) return;
+
+        const systemPrompt = customPromptIsOverride && customPrompt?.trim()
+          ? customPrompt.trim()
+          : conversationHistory.length === 0
+            ? buildQuizInitializationPrompt({
+                lessonTitle,
+                lessonDescription,
+                videoTopics,
+                customPrompt,
+              })
+            : buildQuizFollowUpPrompt({
+                lessonTitle,
+                lessonDescription,
+                videoTopics,
+                customPrompt,
+                learningState,
+              });
+        const profile = buildGenerationProfile({
+          model,
+          taskMode: 'quiz',
+          systemPrompt,
+        });
+
+        const adapter = getProviderAdapter(model.providerName);
+        result = await adapter.runQuiz({
+          apiKey: key,
+          model,
+          profile,
+          lessonTitle,
+          lessonDescription,
+          videoTopics,
+          userAnswer,
+          conversationHistory: conversationHistory as QuizConversationMessage[],
+          customPrompt,
+          learningState,
+          signal: controller.signal,
+        });
+      }
 
       if (controller.signal.aborted) return;
 

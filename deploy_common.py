@@ -32,6 +32,10 @@ DEFAULT_CONFIG: Dict[str, str] = {
     "JWT_SECRET": "",
     "PROVIDER_SECRET_KEY": "",
     "GEMINI_API_KEY": "",
+    "QUIZ_PROVIDER": "",
+    "OLLAMA_HOST": "http://127.0.0.1:11434",
+    "OLLAMA_MODEL": "qwen2.5:0.5b",
+    "OLLAMA_TIMEOUT_MS": "90000",
     "SSH_HOME": "/home/artem",
 }
 
@@ -55,6 +59,10 @@ class DeployConfig:
     jwt_secret: str
     provider_secret_key: str
     gemini_api_key: str
+    quiz_provider: str
+    ollama_host: str
+    ollama_model: str
+    ollama_timeout_ms: int
     ssh_home: str
 
 
@@ -111,6 +119,10 @@ def load_config() -> DeployConfig:
         jwt_secret=values["JWT_SECRET"],
         provider_secret_key=values["PROVIDER_SECRET_KEY"],
         gemini_api_key=values["GEMINI_API_KEY"],
+        quiz_provider=values["QUIZ_PROVIDER"],
+        ollama_host=values["OLLAMA_HOST"],
+        ollama_model=values["OLLAMA_MODEL"],
+        ollama_timeout_ms=int(values["OLLAMA_TIMEOUT_MS"]),
         ssh_home=values["SSH_HOME"],
     )
 

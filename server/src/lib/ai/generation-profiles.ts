@@ -48,6 +48,9 @@ const PROVIDER_OVERRIDES: Record<string, Partial<Record<AITaskMode, ProfileDefau
     image_analysis: { maxOutputTokens: 6144 },
     quiz: { maxOutputTokens: 2048 },
   },
+  ollama: {
+    quiz: { temperature: 0.15, maxOutputTokens: 768 },
+  },
 };
 
 export function detectChatTaskMode(messages: Array<{ images?: string[]; attachmentIds?: string[] }>): Exclude<AITaskMode, 'quiz'> {
