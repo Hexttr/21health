@@ -1,4 +1,4 @@
-# Миграция данных 21day-platform
+# Миграция данных в `21health`
 
 ## Импорт из data-package
 
@@ -23,4 +23,4 @@ npm run db:import-lessons -- path/to/export.json
 
 ## Файлы на сервере
 
-После импорта: `server/uploads/` содержит PDF и превью. Скопируйте на сервер в `/var/www/21day-platform/server/uploads/` (scp/rsync).
+После импорта: `server/uploads/` содержит PDF и превью. Скопируйте их в каталог проекта на сервере, например `/var/www/21health/server/uploads/` (scp/rsync).

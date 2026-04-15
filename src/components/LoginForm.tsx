@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,24 +6,15 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, AlertCircle, Brain, Zap, Target } from 'lucide-react';
 import { TestimonialsSection } from './TestimonialsSection';
-import { useSearchParams } from 'react-router-dom';
 
 export function LoginForm() {
   const { signIn, signUp } = useAuth();
-  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const referralCode = useMemo(() => searchParams.get('ref')?.trim().toUpperCase() || '', [searchParams]);
-
-  React.useEffect(() => {
-    if (referralCode) {
-      setSuccess('Реферальная ссылка больше не требуется: просто зарегистрируйтесь по email.');
-    }
-  }, [referralCode]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,11 +200,6 @@ export function LoginForm() {
 
                   <TabsContent value="register" className="mt-0">
                     <form onSubmit={handleSignUp} className="space-y-5">
-                      {referralCode && (
-                        <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground">
-                          Реферальные и пригласительные коды убраны. Создайте аккаунт и получите полный доступ сразу после регистрации.
-                        </div>
-                      )}
                       <div className="space-y-2">
                         <Label htmlFor="name-register" className="text-sm font-medium">
                           Ф.И.О.

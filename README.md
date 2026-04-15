@@ -18,7 +18,7 @@
 docker compose up -d
 ```
 
-Если PostgreSQL уже установлен — создайте базу `21day` или используйте существующую.
+Если PostgreSQL уже установлен — создайте базу `21health` или используйте существующую.
 
 ### 2. Backend (первый запуск)
 
@@ -31,15 +31,15 @@ cp .env.example .env
 Отредактируйте `server/.env`:
 
 ```
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/21day"
-JWT_SECRET="21day-dev-secret-change-in-production"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/21health"
+JWT_SECRET="21health-dev-secret-change-in-production"
 GEMINI_API_KEY="ваш-ключ-gemini-api"
 ```
 
 Создайте БД, примените миграции и seed:
 
 ```bash
-npm run db:create    # Создать БД 21day (если нет)
+npm run db:create    # Создать БД 21health (если нет)
 npm run db:migrate   # Применить миграции
 npm run db:seed      # Создать первого администратора
 ```
