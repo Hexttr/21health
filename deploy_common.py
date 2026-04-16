@@ -6,10 +6,12 @@ from __future__ import annotations
 import os
 import posixpath
 import shlex
+import subprocess
+import tarfile
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterator, Tuple
 
 import paramiko
 
@@ -37,6 +39,13 @@ DEFAULT_CONFIG: Dict[str, str] = {
     "OLLAMA_MODEL": "qwen2.5:0.5b",
     "OLLAMA_TIMEOUT_MS": "90000",
     "SSH_HOME": "/home/artem",
+    # git — обновление кода на сервере через `git fetch` (нужен интернет на сервере).
+    # local — упаковка текущего каталога на ПК и выгрузка по SSH (сервер без интернета).
+    "DEPLOY_CODE_SOURCE": "git",
+    # При DEPLOY_CODE_SOURCE=local по умолчанию не тянем модель Ollama на сервере.
+    "DEPLOY_SKIP_OLLAMA_SETUP": "",
+    # Принудительно не вызывать npm ci на сервере (если уже в образе).
+    "DEPLOY_SKIP_NPM_ON_SERVER": "",
 }
 
 
@@ -64,6 +73,9 @@ class DeployConfig:
     ollama_model: str
     ollama_timeout_ms: int
     ssh_home: str
+    code_source: str
+    skip_ollama_setup: bool
+    skip_npm_on_server: bool
 
 
 def _read_local_kv_file(path: Path) -> Dict[str, str]:
@@ -101,6 +113,19 @@ def load_config() -> DeployConfig:
             + ". Set them in deploy.local or environment variables."
         )
 
+    code_source = values.get("DEPLOY_CODE_SOURCE", "git").strip().lower()
+    if code_source not in ("git", "local"):
+        raise RuntimeError("DEPLOY_CODE_SOURCE must be 'git' or 'local'")
+
+    def _flag(key: str, default: bool) -> bool:
+        raw = values.get(key, "")
+        if raw == "":
+            return default
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    skip_ollama = _flag("DEPLOY_SKIP_OLLAMA_SETUP", default=(code_source == "local"))
+    skip_npm = _flag("DEPLOY_SKIP_NPM_ON_SERVER", default=(code_source == "local"))
+
     return DeployConfig(
         ssh_host=values["DEPLOY_SSH_HOST"],
         ssh_port=int(values["DEPLOY_SSH_PORT"]),
@@ -124,6 +149,9 @@ def load_config() -> DeployConfig:
         ollama_model=values["OLLAMA_MODEL"],
         ollama_timeout_ms=int(values["OLLAMA_TIMEOUT_MS"]),
         ssh_home=values["SSH_HOME"],
+        code_source=code_source,
+        skip_ollama_setup=skip_ollama,
+        skip_npm_on_server=skip_npm,
     )
 
 
@@ -217,3 +245,96 @@ def write_remote_text(
         )
     finally:
         sftp.close()
+
+
+_SKIP_DIR_NAMES = frozenset({".git", "__pycache__", ".cursor", ".idea"})
+
+
+def _iter_bundle_files(repo_root: Path) -> Iterator[Tuple[Path, str]]:
+    """Файлы для архива деплоя с ПК (без секретов и мусора)."""
+    root = repo_root.resolve()
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        rel_dir = Path(dirpath).relative_to(root)
+        if rel_dir.parts and rel_dir.parts[0] in _SKIP_DIR_NAMES:
+            dirnames.clear()
+            continue
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIR_NAMES]
+        for name in filenames:
+            if name == "deploy.local":
+                continue
+            if name.endswith(".pyc"):
+                continue
+            full = Path(dirpath) / name
+            rel = full.relative_to(root)
+            key = rel.as_posix()
+            if key == "server/.env" or key == ".env":
+                continue
+            yield full, key
+
+
+def run_local_npm_build(repo_root: Path) -> None:
+    """Сборка и установка зависимостей на ПК (где есть интернет)."""
+    root = repo_root.resolve()
+    print("  (local) npm ci — корень проекта...")
+    subprocess.run(["npm", "ci"], cwd=str(root), check=True)
+    print("  (local) npm ci — server/...")
+    subprocess.run(["npm", "ci"], cwd=str(root / "server"), check=True)
+    env = os.environ.copy()
+    env["VITE_API_URL"] = "/api"
+    print("  (local) npm run build — фронт (VITE_API_URL=/api)...")
+    subprocess.run(["npm", "run", "build"], cwd=str(root), check=True, env=env)
+    print("  (local) npm run build — backend...")
+    subprocess.run(["npm", "run", "build"], cwd=str(root / "server"), check=True)
+
+
+def create_bundle_tarball(repo_root: Path) -> Path:
+    fd, path = tempfile.mkstemp(suffix=".tar.gz")
+    os.close(fd)
+    tar_path = Path(path)
+    print(f"  (local) архив: {tar_path} …")
+    with tarfile.open(tar_path, "w:gz") as tf:
+        for abs_path, arcname in _iter_bundle_files(repo_root):
+            tf.add(abs_path, arcname=arcname, recursive=False)
+    return tar_path
+
+
+def upload_bundle_and_extract(ssh: paramiko.SSHClient, config: DeployConfig, tarball: Path) -> None:
+    remote_tar = "/tmp/21health-deploy-bundle.tgz"
+    deploy = config.deploy_dir
+    size_kb = max(1, tarball.stat().st_size // 1024)
+    print(f"  (scp) загрузка архива ~{size_kb} KB на сервер…")
+    sftp = ssh.open_sftp()
+    try:
+        sftp.put(str(tarball), remote_tar)
+    finally:
+        sftp.close()
+
+    run_remote(
+        ssh,
+        f"mkdir -p {shlex.quote(deploy)} && "
+        f"if [ -f {shlex.quote(deploy)}/server/.env ]; then cp -a {shlex.quote(deploy)}/server/.env /tmp/21health.env.bak.deploy; fi",
+        timeout=120,
+    )
+    run_remote(
+        ssh,
+        f"cd {shlex.quote(deploy)} && tar -xzf {shlex.quote(remote_tar)}",
+        timeout=3600,
+    )
+    run_remote(
+        ssh,
+        "if [ -f /tmp/21health.env.bak.deploy ]; then "
+        f"cp -a /tmp/21health.env.bak.deploy {shlex.quote(deploy)}/server/.env; "
+        "rm -f /tmp/21health.env.bak.deploy; fi",
+        timeout=60,
+    )
+    run_remote(ssh, f"rm -f {shlex.quote(remote_tar)}", check=False, timeout=60)
+
+
+def prepare_pc_bundle_and_upload(ssh: paramiko.SSHClient, config: DeployConfig, repo_root: Path) -> None:
+    """Деплой без интернета на сервере: сборка на ПК, выгрузка по SSH, распаковка."""
+    run_local_npm_build(repo_root)
+    tar_path = create_bundle_tarball(repo_root)
+    try:
+        upload_bundle_and_extract(ssh, config, tar_path)
+    finally:
+        tar_path.unlink(missing_ok=True)
