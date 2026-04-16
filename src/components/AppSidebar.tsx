@@ -1,4 +1,4 @@
-import { Users, Play, LogOut, BookOpen, X, Shield, MessageCircle, Bot } from "lucide-react";
+import { Users, Play, LogOut, BookOpen, X, Shield, MessageCircle, Bot, GraduationCap, Library, Building2, ClipboardCheck, BarChart3, History } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProgress } from "@/contexts/ProgressContext";
@@ -29,14 +29,14 @@ const adminItems = [
 
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
-  const { isAdmin, user, signOut } = useAuth();
+  const { isAdmin, isLmsStaff, canViewLmsAnalytics, user, signOut } = useAuth();
   const { getCompletedCount, getProgressPercentage } = useProgress();
   const location = useLocation();
   const navigate = useNavigate();
   const collapsed = state === "collapsed";
 
   const goHome = () => {
-    navigate('/');
+    navigate('/lms');
     setOpenMobile(false);
   };
 
@@ -56,7 +56,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4 pb-4">
         {!collapsed ? (
           <div className="flex items-center gap-2 w-full">
-            <button onClick={goHome} className="flex items-center gap-3 group flex-1 min-w-0">
+            <button type="button" onClick={goHome} className="flex items-center gap-3 group flex-1 min-w-0">
               <div className="w-11 h-11 rounded-xl gradient-hero flex items-center justify-center shadow-glow flex-shrink-0">
                 <span className="text-white font-extrabold text-lg tracking-tight">21</span>
               </div>
@@ -68,7 +68,7 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <NavLink to="/" className="flex justify-center">
+            <NavLink to="/lms" className="flex justify-center">
               <div className="w-11 h-11 rounded-xl gradient-hero flex items-center justify-center shadow-glow">
                 <span className="text-white font-extrabold text-lg tracking-tight">21</span>
               </div>
@@ -81,7 +81,7 @@ export function AppSidebar() {
       <SidebarContent className="gap-0">
         {!collapsed && (
           <div className="px-3 pb-3">
-            <button onClick={goHome} className="w-full text-left p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors cursor-pointer" style={{ background: 'hsl(263 52% 50% / 0.07)' }}>
+            <button type="button" onClick={goHome} className="w-full text-left p-3 rounded-xl bg-primary/8 border border-primary/15 hover:bg-primary/12 transition-colors cursor-pointer" style={{ background: 'hsl(263 52% 50% / 0.07)' }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-foreground">Мой прогресс</span>
                 <span className="text-xs font-bold text-primary">{progressPercentage}%</span>
@@ -96,6 +96,84 @@ export function AppSidebar() {
             </button>
           </div>
         )}
+
+        <SidebarGroup className={collapsed ? "px-2 pb-2 pt-1" : "px-3 pb-2 pt-1"}>
+            {!collapsed && (
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider text-muted-foreground px-0 pb-2">
+              LMS
+            </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1.5">
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location.pathname === "/lms"} tooltip="Обучение" className={getMenuButtonClass(location.pathname === "/lms")}>
+                    <NavLink to="/lms" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                      <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/lms" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                        <GraduationCap className="h-4 w-4" />
+                      </span>
+                      <span className="font-medium">Обучение</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location.pathname === "/course-legacy"} tooltip="Курс 21 день" className={getMenuButtonClass(location.pathname === "/course-legacy")}>
+                    <NavLink to="/course-legacy" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                      <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/course-legacy" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                        <History className="h-4 w-4" />
+                      </span>
+                      <span className="font-medium">Курс 21 день</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {isLmsStaff && (
+                  <>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location.pathname === "/lms/admin/courses"} tooltip="Курсы LMS" className={getMenuButtonClass(location.pathname === "/lms/admin/courses")}>
+                        <NavLink to="/lms/admin/courses" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/lms/admin/courses" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                            <Library className="h-4 w-4" />
+                          </span>
+                          <span className="font-medium">Курсы LMS</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location.pathname === "/lms/admin/org"} tooltip="Оргструктура" className={getMenuButtonClass(location.pathname === "/lms/admin/org")}>
+                        <NavLink to="/lms/admin/org" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/lms/admin/org" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                            <Building2 className="h-4 w-4" />
+                          </span>
+                          <span className="font-medium">Оргструктура</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild isActive={location.pathname === "/lms/admin/practice"} tooltip="Практика" className={getMenuButtonClass(location.pathname === "/lms/admin/practice")}>
+                        <NavLink to="/lms/admin/practice" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/lms/admin/practice" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                            <ClipboardCheck className="h-4 w-4" />
+                          </span>
+                          <span className="font-medium">Практика</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </>
+                )}
+                {canViewLmsAnalytics && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={location.pathname === "/lms/analytics"} tooltip="Аналитика" className={getMenuButtonClass(location.pathname === "/lms/analytics")}>
+                      <NavLink to="/lms/analytics" className="flex items-center gap-3" onClick={() => setOpenMobile(false)}>
+                        <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors", location.pathname === "/lms/analytics" ? "border-primary/15 bg-primary/10 text-primary" : "border-border/40 bg-background/80 text-muted-foreground")}>
+                          <BarChart3 className="h-4 w-4" />
+                        </span>
+                        <span className="font-medium">Аналитика LMS</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
         {/* ── Admin ── */}
         {isAdmin && (

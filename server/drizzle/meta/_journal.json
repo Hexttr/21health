@@ -92,6 +92,13 @@
       "when": 1774400000000,
       "tag": "0012_split_student_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774600000000,
+      "tag": "0014_lms_mvp",
+      "breakpoints": true
     }
   ]
 }

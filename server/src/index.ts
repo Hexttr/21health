@@ -16,6 +16,7 @@ import { testimonialsRoutes } from './routes/testimonials.js';
 import { adminRoutes } from './routes/admin.js';
 import { aiRoutes } from './routes/ai.js';
 import { aiModelsRoutes } from './routes/ai-models.js';
+import { lmsRoutes } from './routes/lms.js';
 import { db } from './db/index.js';
 import { lessonContent, practicalMaterials } from './db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -42,6 +43,7 @@ async function main() {
   await app.register(adminRoutes, { prefix: '/api' });
   await app.register(aiRoutes, { prefix: '/api' });
   await app.register(aiModelsRoutes, { prefix: '/api' });
+  await app.register(lmsRoutes, { prefix: '/api' });
 
   // Upload PDF for lesson
   app.post('/api/admin/lessons/upload-pdf', async (req, reply) => {

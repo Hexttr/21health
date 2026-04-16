@@ -19,6 +19,13 @@ const AdminMaterials = React.lazy(() => import("./pages/admin/AdminMaterials"));
 const AdminStudents = React.lazy(() => import("./pages/admin/AdminStudents"));
 const AdminBilling = React.lazy(() => import("./pages/admin/AdminBilling"));
 const AdminTestimonials = React.lazy(() => import("./pages/admin/AdminTestimonials"));
+const CourseLegacy = React.lazy(() => import("./pages/CourseLegacy"));
+const LmsHome = React.lazy(() => import("./pages/lms/LmsHome"));
+const LmsEnrollment = React.lazy(() => import("./pages/lms/LmsEnrollment"));
+const LmsAdminCourses = React.lazy(() => import("./pages/lms/LmsAdminCourses"));
+const LmsAdminOrg = React.lazy(() => import("./pages/lms/LmsAdminOrg"));
+const LmsPracticeReview = React.lazy(() => import("./pages/lms/LmsPracticeReview"));
+const LmsAnalytics = React.lazy(() => import("./pages/lms/LmsAnalytics"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +77,45 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Protected admin route wrapper
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) {
+    return <RouteFallback />;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
+const LmsStaffRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading, isLmsStaff } = useAuth();
+  if (isLoading) {
+    return <RouteFallback />;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  if (!isLmsStaff) {
+    return <Navigate to="/lms" replace />;
+  }
+  return <>{children}</>;
+};
+
+const LmsAnalyticsRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading, canViewLmsAnalytics } = useAuth();
+  if (isLoading) {
+    return <RouteFallback />;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  if (!canViewLmsAnalytics) {
+    return <Navigate to="/lms" replace />;
+  }
+  return <>{children}</>;
+};
+
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAdmin, isLoading, isAuthenticated } = useAuth();
   
@@ -100,6 +146,76 @@ const App = () => (
                     element={
                       <AppLayout>
                         <Index />
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms"
+                    element={
+                      <AppLayout>
+                        <ProtectedRoute>
+                          <LmsHome />
+                        </ProtectedRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms/enrollment/:enrollmentId"
+                    element={
+                      <AppLayout>
+                        <ProtectedRoute>
+                          <LmsEnrollment />
+                        </ProtectedRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/course-legacy"
+                    element={
+                      <AppLayout>
+                        <ProtectedRoute>
+                          <CourseLegacy />
+                        </ProtectedRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms/admin/courses"
+                    element={
+                      <AppLayout>
+                        <LmsStaffRoute>
+                          <LmsAdminCourses />
+                        </LmsStaffRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms/admin/org"
+                    element={
+                      <AppLayout>
+                        <LmsStaffRoute>
+                          <LmsAdminOrg />
+                        </LmsStaffRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms/admin/practice"
+                    element={
+                      <AppLayout>
+                        <LmsStaffRoute>
+                          <LmsPracticeReview />
+                        </LmsStaffRoute>
+                      </AppLayout>
+                    }
+                  />
+                  <Route
+                    path="/lms/analytics"
+                    element={
+                      <AppLayout>
+                        <LmsAnalyticsRoute>
+                          <LmsAnalytics />
+                        </LmsAnalyticsRoute>
                       </AppLayout>
                     }
                   />

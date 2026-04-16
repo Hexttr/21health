@@ -5,10 +5,12 @@ import type { FastifyRequest } from 'fastify';
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const JWT_EXPIRES_IN = '7d';
 
+import type { AppRole } from './roles.js';
+
 export interface JwtPayload {
   userId: string;
   email: string;
-  role: 'admin' | 'student';
+  role: AppRole;
 }
 
 export async function hashPassword(password: string): Promise<string> {

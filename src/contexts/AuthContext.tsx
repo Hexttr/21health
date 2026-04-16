@@ -1,11 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api, setToken } from '@/api/client';
 
+export type AppRole =
+  | 'admin'
+  | 'tutor'
+  | 'learner'
+  | 'department_head'
+  | 'mentor'
+  | 'student';
+
 export interface AppUser {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'student';
+  role: AppRole;
+  /** When present, all roles assigned to the user (LMS) */
+  roles?: AppRole[];
 }
 
 interface SignUpParams {
@@ -19,6 +29,10 @@ interface AuthContextType {
   session: { user: AppUser } | null;
   isLoading: boolean;
   isAdmin: boolean;
+  /** admin или tutor — доступ к LMS-админке курсов */
+  isLmsStaff: boolean;
+  /** admin, tutor, руководитель подразделения, наставник — сводка LMS */
+  canViewLmsAnalytics: boolean;
   isSessionReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
@@ -32,12 +46,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLmsStaff, setIsLmsStaff] = useState(false);
+  const [canViewLmsAnalytics, setCanViewLmsAnalytics] = useState(false);
   const [isSessionReady, setIsSessionReady] = useState(false);
+
+  const applyRoles = (nextUser: AppUser) => {
+    const rs = nextUser.roles ?? [nextUser.role];
+    setIsAdmin(rs.includes('admin'));
+    setIsLmsStaff(rs.includes('admin') || rs.includes('tutor'));
+    setCanViewLmsAnalytics(
+      rs.includes('admin') ||
+        rs.includes('tutor') ||
+        rs.includes('department_head') ||
+        rs.includes('mentor'),
+    );
+  };
 
   const applyAuthenticatedSession = (token: string, nextUser: AppUser) => {
     setToken(token);
     setUser(nextUser);
-    setIsAdmin(nextUser.role === 'admin');
+    applyRoles(nextUser);
     setIsSessionReady(true);
   };
 
@@ -51,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api<{ user: AppUser }>('/auth/me')
       .then(({ user: u }) => {
         setUser(u);
-        setIsAdmin(u.role === 'admin');
+        applyRoles(u);
       })
       .catch(() => {
         setToken(null);
@@ -97,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setIsAdmin(false);
+    setIsLmsStaff(false);
+    setCanViewLmsAnalytics(false);
   };
 
   const session = user ? { user } : null;
@@ -108,6 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         isLoading,
         isAdmin,
+        isLmsStaff,
+        canViewLmsAnalytics,
         isSessionReady,
         signIn,
         signUp,
@@ -128,6 +160,8 @@ export function useAuth() {
       session: null,
       isLoading: true,
       isAdmin: false,
+      isLmsStaff: false,
+      canViewLmsAnalytics: false,
       isSessionReady: false,
       signIn: async () => ({ error: 'Auth not ready' as string | null }),
       signUp: async () => ({ error: 'Auth not ready' as string | null }),

@@ -36,3 +36,5 @@ server/migration_export/
 check_lessons.py
 login.json
 server/scripts/check-lessons.js
+__pycache__/
+*.pyc

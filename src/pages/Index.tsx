@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginForm } from '@/components/LoginForm';
-import { Dashboard } from '@/components/Dashboard';
 import { Loader2 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 
 const Index = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -15,7 +15,7 @@ const Index = () => {
   }
 
   if (!isAuthenticated) return <LoginForm />;
-  return <Dashboard />;
+  return <Navigate to="/lms" replace />;
 };
 
 export default Index;

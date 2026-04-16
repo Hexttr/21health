@@ -18,7 +18,7 @@ export const userRoles = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['admin', 'student'] }).notNull().default('student'),
+    role: text('role').notNull().default('learner'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('user_roles_user_id_role_idx').on(table.userId, table.role)]
@@ -139,3 +139,5 @@ export type AIProvider = typeof aiProviders.$inferSelect;
 export type ProviderSecret = typeof providerSecrets.$inferSelect;
 export type AIModel = typeof aiModels.$inferSelect;
 export type PlatformSetting = typeof platformSettings.$inferSelect;
+
+export * from './lms-schema.js';

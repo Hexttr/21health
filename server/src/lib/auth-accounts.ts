@@ -5,14 +5,16 @@ import {
   users,
 } from '../db/schema.js';
 import { hashPassword, signToken } from './auth.js';
+import { pickPrimaryRole, type AppRole } from './roles.js';
 
-export type AppRole = 'admin' | 'student';
+export type { AppRole };
 
 export interface AuthUserDto {
   id: string;
   email: string;
   name: string;
   role: AppRole;
+  roles: AppRole[];
 }
 
 export interface AuthSuccessResponse {
@@ -52,14 +54,17 @@ export async function loadAuthUserById(userId: string): Promise<AuthUserDto | nu
     return null;
   }
 
-  const [roleRow] = await db.select().from(userRoles).where(eq(userRoles.userId, user.id));
-  const role = (roleRow?.role as AppRole) || 'student';
+  const roleRows = await db.select().from(userRoles).where(eq(userRoles.userId, user.id));
+  const rolesRaw = roleRows.map((r) => r.role);
+  const role = pickPrimaryRole(rolesRaw);
+  const roles = rolesRaw.map((r) => (r === 'student' ? 'learner' : r)) as AppRole[];
 
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role,
+    roles: roles.length ? [...new Set(roles)] : ['learner'],
   };
 }
 
@@ -109,10 +114,10 @@ export async function createUserFromAuthIdentity(input: CreateUserFromAuthIdenti
     throw new Error('Ошибка создания пользователя');
   }
 
-  await db.insert(userRoles).values({ userId: newUser.id, role: 'student' });
+  await db.insert(userRoles).values({ userId: newUser.id, role: 'learner' });
 
   return {
     user: newUser,
-    role: 'student' as const,
+    role: 'learner' as const,
   };
 }
